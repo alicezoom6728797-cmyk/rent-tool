@@ -1,6 +1,6 @@
 import AMapLoader from '@amap/amap-jsapi-loader';
 
-const AMAP_KEY = 'test_claw';
+const AMAP_KEY = '840c47d82756ee054946bd79bf320f4e';
 const AMAP_SECRET = '2c259b4a7069d070929b23ca15cb5361';
 
 let mapInstance: any = null;

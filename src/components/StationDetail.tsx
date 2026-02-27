@@ -32,7 +32,7 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
     const keyword = station.name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '');
 
     fetch(
-      `https://restapi.amap.com/v3/bus/linename?s=rsv3&extensions=all&key=test_claw&output=json&city=全国&offset=20&keywords=${encodeURIComponent(keyword)}`
+      `https://restapi.amap.com/v3/bus/linename?s=rsv3&extensions=all&key=840c47d82756ee054946bd79bf320f4e&output=json&city=全国&offset=20&keywords=${encodeURIComponent(keyword)}`
     )
       .then((res) => res.json())
       .then((data) => {
