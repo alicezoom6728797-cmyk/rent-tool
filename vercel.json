@@ -1,0 +1,6 @@
+{
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "installCommand": "NODE_ENV=development npm install",
+  "framework": "vite"
+}
