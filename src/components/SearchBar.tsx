@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Input, message } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { initAMap, getAMap, getMap } from '../services/amapService';
+import { getAMap, getMap } from '../services/amapService';
 import { useAppStore } from '../stores/appStore';
 
 const { Search } = Input;
@@ -33,8 +33,6 @@ export default function SearchBar() {
         const map = getMap();
         map.setCenter(center);
         map.setZoom(15);
-
-        // 清除旧标记，添加新标记
         map.clearMap();
         new AMap.Marker({
           position: center,
@@ -43,8 +41,7 @@ export default function SearchBar() {
           zIndex: 200,
         });
 
-        // 搜索周边站点
-        searchNearbyStations(center, radius, AMap, map);
+        searchNearbyStations(center, radius, AMap);
       } else {
         message.error('地址解析失败，请尝试更详细的地址');
         setLoading(false);
@@ -56,13 +53,7 @@ export default function SearchBar() {
     center: [number, number],
     radius: number,
     AMap: any,
-    map: any
   ) => {
-    const placeSearch = new AMap.PlaceSearch({
-      pageSize: 50,
-      pageIndex: 1,
-    });
-
     const allStations: any[] = [];
     let completed = 0;
 
@@ -72,9 +63,13 @@ export default function SearchBar() {
     ];
 
     types.forEach(({ code, type }) => {
-      placeSearch.searchNearBy('', center, radius, {
-        types: code,
-      }, (status: string, result: any) => {
+      const ps = new AMap.PlaceSearch({
+        type: code,
+        pageSize: 50,
+        pageIndex: 1,
+      });
+
+      ps.searchNearBy('', center, radius, (status: string, result: any) => {
         completed++;
         if (status === 'complete' && result.poiList?.pois) {
           result.poiList.pois.forEach((poi: any) => {
