@@ -7,33 +7,20 @@ let mapInstance: any = null;
 let AMapGlobal: any = null;
 
 export async function initAMap(container: string | HTMLElement): Promise<any> {
-  (window as any)._AMapSecurityConfig = {
-    securityJsCode: AMAP_SECRET,
-  };
+  (window as any)._AMapSecurityConfig = { securityJsCode: AMAP_SECRET };
   AMapGlobal = await AMapLoader.load({
     key: AMAP_KEY,
     version: '1.4.15',
     plugins: [
-      'AMap.Geocoder',
-      'AMap.PlaceSearch',
-      'AMap.Walking',
-      'AMap.AutoComplete',
-      'AMap.LineSearch',
-      'AMap.StationSearch',
+      'AMap.Geocoder', 'AMap.PlaceSearch', 'AMap.Walking',
+      'AMap.AutoComplete', 'AMap.LineSearch', 'AMap.StationSearch',
     ],
   });
   mapInstance = new AMapGlobal.Map(container, {
-    zoom: 14,
-    center: [116.397428, 39.90923],
-    viewMode: '2D',
+    zoom: 14, center: [116.397428, 39.90923], viewMode: '2D',
   });
   return { map: mapInstance, AMap: AMapGlobal };
 }
 
-export function getAMap() {
-  return AMapGlobal;
-}
-
-export function getMap() {
-  return mapInstance;
-}
+export function getAMap() { return AMapGlobal; }
+export function getMap() { return mapInstance; }

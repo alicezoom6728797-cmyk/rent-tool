@@ -58,7 +58,8 @@ export function useMapMarkers(onStationClick: (s: StationInfo) => void) {
     routeOverlaysRef.current.forEach((o) => { try { map.remove(o); } catch {} });
     routeOverlaysRef.current = [];
 
-    routes.filter((r) => r.visible && r.path && r.path.length > 1).forEach((route) => {
+    const visibleRoutes = routes.filter((r) => r.visible && r.path && r.path.length > 1);
+    visibleRoutes.forEach((route) => {
       const path = route.path!.map(toLngLat);
 
       const polyline = new AMap.Polyline({
@@ -79,5 +80,10 @@ export function useMapMarkers(onStationClick: (s: StationInfo) => void) {
         routeOverlaysRef.current.push(dot);
       });
     });
+
+    // 有路线时自动调整视野让路线可见
+    if (routeOverlaysRef.current.length > 0) {
+      map.setFitView(routeOverlaysRef.current, false, [60, 60, 60, 400]);
+    }
   }, [routes]);
 }
