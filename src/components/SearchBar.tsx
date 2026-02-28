@@ -36,6 +36,7 @@ export default function SearchBar() {
   const [inputVal, setInputVal] = useState('');
   const [suggestions, setSuggestions] = useState<{ value: string; label: string }[]>([]);
   const timerRef = useRef<any>(null);
+  const searchingRef = useRef(false);
 
   const getCityPath = (): string[] => {
     for (const p of CITY_OPTIONS) {
@@ -71,6 +72,7 @@ export default function SearchBar() {
 
   const handleInputChange = (val: string) => {
     setInputVal(val);
+    if (searchingRef.current) return;
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => fetchSuggestions(val), 300);
   };
@@ -113,7 +115,6 @@ export default function SearchBar() {
     types.forEach(({ code, type }) => {
       const ps = new AMap.PlaceSearch({ type: code, pageSize: 50, pageIndex: 1 });
       ps.searchNearBy('', center, radius, (status: string, result: any) => {
-        completed++;
         if (status === 'complete' && result.poiList?.pois) {
           result.poiList.pois.forEach((poi: any) => {
             allStations.push({
@@ -124,10 +125,12 @@ export default function SearchBar() {
             });
           });
         }
-        if (completed === types.length) {
+        completed++;
+        if (completed >= types.length) {
           allStations.sort((a, b) => a.distance - b.distance);
           setStations(allStations);
           setLoading(false);
+          searchingRef.current = false;
         }
       });
     });
@@ -149,7 +152,7 @@ export default function SearchBar() {
         options={suggestions}
         value={inputVal}
         onChange={handleInputChange}
-        onSelect={(val) => { setInputVal(val); handleSearch(val); }}
+        onSelect={(val) => { searchingRef.current = true; clearTimeout(timerRef.current); setInputVal(val); handleSearch(val); }}
         popupMatchSelectWidth={true}
       >
         <Input
