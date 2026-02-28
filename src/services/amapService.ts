@@ -12,7 +12,7 @@ export async function initAMap(container: string | HTMLElement): Promise<any> {
   };
   AMapGlobal = await AMapLoader.load({
     key: AMAP_KEY,
-    version: '2.0',
+    version: '1.4.15',
     plugins: [
       'AMap.Geocoder',
       'AMap.PlaceSearch',
