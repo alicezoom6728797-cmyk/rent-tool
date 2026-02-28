@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { AutoComplete, Cascader, message, Button, Space } from 'antd';
+import { AutoComplete, Cascader, message, Button, Space, Input } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { getAMap, getMap } from '../services/amapService';
 import { useAppStore } from '../stores/appStore';
@@ -53,7 +53,7 @@ export default function SearchBar() {
     if (!keyword.trim()) { setSuggestions([]); return; }
     const AMap = getAMap();
     if (!AMap) return;
-    const ac = new AMap.AutoComplete({ city });
+    const ac = new AMap.Autocomplete({ city });
     ac.search(keyword, (_status: string, result: any) => {
       if (result?.tips) {
         setSuggestions(
@@ -149,14 +149,14 @@ export default function SearchBar() {
         value={inputVal}
         onChange={handleInputChange}
         onSelect={(val) => { setInputVal(val); handleSearch(val); }}
-        placeholder="输入地址搜索，如：西湖文化广场"
       >
-        <input
-          style={{ width: '100%', height: 40, padding: '0 11px', border: '1px solid #d9d9d9', borderRadius: '0 6px 6px 0', fontSize: 14, outline: 'none' }}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(inputVal); }}
+        <Input
+          size="large"
+          placeholder="输入地址搜索，如：西湖文化广场"
+          onPressEnter={() => handleSearch(inputVal)}
+          suffix={<SearchOutlined style={{ cursor: 'pointer', color: '#1677ff' }} onClick={() => handleSearch(inputVal)} />}
         />
       </AutoComplete>
-      <Button type="primary" size="large" icon={<SearchOutlined />} onClick={() => handleSearch(inputVal)} />
     </Space.Compact>
   );
 }

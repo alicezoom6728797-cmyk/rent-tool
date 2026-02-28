@@ -13,7 +13,7 @@ export async function initAMap(container: string | HTMLElement): Promise<any> {
     version: '1.4.15',
     plugins: [
       'AMap.Geocoder', 'AMap.PlaceSearch', 'AMap.Walking',
-      'AMap.AutoComplete', 'AMap.LineSearch', 'AMap.StationSearch',
+      'AMap.Autocomplete', 'AMap.LineSearch', 'AMap.StationSearch',
     ],
   });
   mapInstance = new AMapGlobal.Map(container, {
