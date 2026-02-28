@@ -15,7 +15,7 @@ import type { StationInfo, RouteInfo } from './types';
 const { Title } = Typography;
 
 function AppContent() {
-  const { selectedStation, setSelectedStation, addRoute } = useAppStore();
+  const { selectedStation, setSelectedStation, addRoute, routes } = useAppStore();
 
   const handleStationClick = useCallback((station: StationInfo) => {
     setSelectedStation(station);
@@ -64,7 +64,7 @@ function AppContent() {
             </>
           )}
 
-          {useAppStore.getState().routes.length > 0 && (
+          {routes.length > 0 && (
             <>
               <Divider style={{ margin: '12px 0' }} />
               <RoutePanel />
