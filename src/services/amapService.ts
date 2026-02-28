@@ -18,6 +18,8 @@ export async function initAMap(container: string | HTMLElement): Promise<any> {
       'AMap.PlaceSearch',
       'AMap.Walking',
       'AMap.AutoComplete',
+      'AMap.LineSearch',
+      'AMap.StationSearch',
     ],
   });
   mapInstance = new AMapGlobal.Map(container, {
