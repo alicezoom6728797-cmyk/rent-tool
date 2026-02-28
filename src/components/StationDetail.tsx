@@ -85,10 +85,10 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
 
       if (status === 'complete' && result.lineInfo?.length > 0) {
         const info = result.lineInfo[0];
-        if (info.path) path = info.path.map((p: any) => [p.lng, p.lat] as [number, number]);
+        if (info.path) path = info.path.map((p: any) => [Number(p.lng), Number(p.lat)] as [number, number]);
         if (info.via_stops) stops = info.via_stops.map((s: any, i: number) => ({
           name: s.name,
-          location: s.location ? [s.location.lng, s.location.lat] as [number, number] : undefined,
+          location: s.location ? [Number(s.location.lng), Number(s.location.lat)] as [number, number] : undefined,
           sequence: i + 1,
         }));
         if (info.timedesc) {
