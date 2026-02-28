@@ -16,14 +16,12 @@ interface LineInfo {
   endStop: string;
   startTime: string;
   endTime: string;
-  path: [number, number][];
-  stops: { name: string; location?: [number, number]; sequence: number }[];
 }
 
 export default function StationDetail({ station, onRouteAdd }: Props) {
   const [lines, setLines] = useState<LineInfo[]>([]);
   const [loading, setLoading] = useState(false);
-  const { routes, nextColor } = useAppStore();
+  const { routes, nextColor, address } = useAppStore();
 
   useEffect(() => {
     setLoading(true);
@@ -31,19 +29,21 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
     const AMap = getAMap();
     if (!AMap) { setLoading(false); return; }
 
-    // 用 StationSearch 查询站点经过的线路
-    const stationSearch = new AMap.StationSearch({ city: '全国' });
+    // 从地址提取城市名
+    const cityMatch = address.match(/^(.+?[市省区])/);
+    const city = cityMatch ? cityMatch[1] : '北京';
+
     const keyword = station.name
       .replace(/\(.*?\)/g, '')
       .replace(/（.*?）/g, '')
       .replace(/地铁站.*口$/, '')
       .replace(/(地铁站|公交站)$/, '');
 
-    stationSearch.search(keyword, (status: string, result: any) => {
+    const ss = new AMap.StationSearch({ city });
+    ss.search(keyword, (status: string, result: any) => {
       if (status === 'complete' && result.stationInfo?.length > 0) {
-        const allLines: LineInfo[] = [];
         const seen = new Set<string>();
-
+        const allLines: LineInfo[] = [];
         result.stationInfo.forEach((si: any) => {
           (si.buslines || []).forEach((line: any) => {
             if (seen.has(line.id)) return;
@@ -55,8 +55,6 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
               endStop: line.end_stop || '',
               startTime: line.stime || '--',
               endTime: line.etime || '--',
-              path: [],
-              stops: [],
             });
           });
         });
@@ -70,13 +68,14 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
 
   const handleAdd = (line: LineInfo) => {
     if (isAdded(line.id)) return;
-
-    // 用 LineSearch 获取完整路线详情
     const AMap = getAMap();
     if (!AMap) return;
 
-    const lineSearch = new AMap.LineSearch({ city: '全国', extensions: 'all' });
-    lineSearch.searchById(line.id, (status: string, result: any) => {
+    const cityMatch = address.match(/^(.+?[市省区])/);
+    const city = cityMatch ? cityMatch[1] : '北京';
+
+    const ls = new AMap.LineSearch({ city, extensions: 'all' });
+    ls.searchById(line.id, (status: string, result: any) => {
       const color = nextColor();
       let path: [number, number][] = [];
       let stops: RouteInfo['stops'] = [];
