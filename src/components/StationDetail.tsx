@@ -31,12 +31,9 @@ function parseTimedesc(timedesc: string): { startTime: string; endTime: string; 
 export default function StationDetail({ station, onRouteAdd }: Props) {
   const [lines, setLines] = useState<LineInfo[]>([]);
   const [loading, setLoading] = useState(false);
-  const { routes, nextColor, address } = useAppStore();
+  const { routes, nextColor, city } = useAppStore();
 
-  const getCity = () => {
-    const m = address.match(/^(.+?[市省区])/);
-    return m ? m[1] : '北京';
-  };
+  const getCity = () => city || '杭州';
 
   useEffect(() => {
     setLoading(true);

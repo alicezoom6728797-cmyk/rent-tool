@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { StationInfo, RouteInfo, ROUTE_COLORS } from '../types';
 
 interface AppState {
+  city: string;
   address: string;
   center: [number, number] | null;
   radius: number;
@@ -11,6 +12,7 @@ interface AppState {
   loading: boolean;
   colorIndex: number;
 
+  setCity: (c: string) => void;
   setAddress: (addr: string) => void;
   setCenter: (c: [number, number]) => void;
   setRadius: (r: number) => void;
@@ -30,6 +32,7 @@ const COLORS = [
 ];
 
 export const useAppStore = create<AppState>((set, get) => ({
+  city: '杭州',
   address: '',
   center: null,
   radius: 1000,
@@ -39,6 +42,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   loading: false,
   colorIndex: 0,
 
+  setCity: (city) => set({ city }),
   setAddress: (address) => set({ address }),
   setCenter: (center) => set({ center }),
   setRadius: (radius) => set({ radius }),
