@@ -14,8 +14,18 @@ interface LineInfo {
   name: string;
   startStop: string;
   endStop: string;
-  startTime: string;
-  endTime: string;
+}
+
+function parseTimedesc(timedesc: string): { startTime: string; endTime: string; interval: string } {
+  try {
+    const data = JSON.parse(decodeURIComponent(timedesc));
+    const remark = data.allRemark || data.rule_group?.[0]?.remark || '';
+    const timeMatch = remark.match(/(\d{2}:\d{2})/g);
+    if (timeMatch && timeMatch.length >= 2) {
+      return { startTime: timeMatch[0], endTime: timeMatch[timeMatch.length - 1], interval: remark.replace(/\\r\\n/g, ' | ') };
+    }
+  } catch {}
+  return { startTime: '--', endTime: '--', interval: '' };
 }
 
 export default function StationDetail({ station, onRouteAdd }: Props) {
@@ -23,23 +33,22 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
   const [loading, setLoading] = useState(false);
   const { routes, nextColor, address } = useAppStore();
 
+  const getCity = () => {
+    const m = address.match(/^(.+?[市省区])/);
+    return m ? m[1] : '北京';
+  };
+
   useEffect(() => {
     setLoading(true);
     setLines([]);
     const AMap = getAMap();
     if (!AMap) { setLoading(false); return; }
 
-    // 从地址提取城市名
-    const cityMatch = address.match(/^(.+?[市省区])/);
-    const city = cityMatch ? cityMatch[1] : '北京';
-
     const keyword = station.name
-      .replace(/\(.*?\)/g, '')
-      .replace(/（.*?）/g, '')
-      .replace(/地铁站.*口$/, '')
-      .replace(/(地铁站|公交站)$/, '');
+      .replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+      .replace(/地铁站.*口$/, '').replace(/(地铁站|公交站)$/, '');
 
-    const ss = new AMap.StationSearch({ city });
+    const ss = new AMap.StationSearch({ city: getCity() });
     ss.search(keyword, (status: string, result: any) => {
       if (status === 'complete' && result.stationInfo?.length > 0) {
         const seen = new Set<string>();
@@ -49,12 +58,8 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
             if (seen.has(line.id)) return;
             seen.add(line.id);
             allLines.push({
-              id: line.id,
-              name: line.name,
-              startStop: line.start_stop || '',
-              endStop: line.end_stop || '',
-              startTime: line.stime || '--',
-              endTime: line.etime || '--',
+              id: line.id, name: line.name,
+              startStop: line.start_stop || '', endStop: line.end_stop || '',
             });
           });
         });
@@ -71,43 +76,31 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
     const AMap = getAMap();
     if (!AMap) return;
 
-    const cityMatch = address.match(/^(.+?[市省区])/);
-    const city = cityMatch ? cityMatch[1] : '北京';
-
-    const ls = new AMap.LineSearch({ city, extensions: 'all' });
+    const ls = new AMap.LineSearch({ city: getCity(), extensions: 'all' });
     ls.searchById(line.id, (status: string, result: any) => {
       const color = nextColor();
       let path: [number, number][] = [];
       let stops: RouteInfo['stops'] = [];
+      let startTime = '--', endTime = '--', interval = '';
 
       if (status === 'complete' && result.lineInfo?.length > 0) {
         const info = result.lineInfo[0];
-        if (info.path) {
-          path = info.path.map((p: any) => [p.lng, p.lat] as [number, number]);
-        }
-        if (info.via_stops) {
-          stops = info.via_stops.map((s: any, i: number) => ({
-            name: s.name,
-            location: s.location ? [s.location.lng, s.location.lat] as [number, number] : undefined,
-            sequence: i + 1,
-          }));
+        if (info.path) path = info.path.map((p: any) => [p.lng, p.lat] as [number, number]);
+        if (info.via_stops) stops = info.via_stops.map((s: any, i: number) => ({
+          name: s.name,
+          location: s.location ? [s.location.lng, s.location.lat] as [number, number] : undefined,
+          sequence: i + 1,
+        }));
+        if (info.timedesc) {
+          const t = parseTimedesc(info.timedesc);
+          startTime = t.startTime; endTime = t.endTime; interval = t.interval;
         }
       }
 
       onRouteAdd({
-        id: line.id,
-        name: line.name,
-        stationId: station.id,
-        stationName: station.name,
-        type: station.type,
-        color,
-        startStop: line.startStop,
-        endStop: line.endStop,
-        startTime: line.startTime,
-        endTime: line.endTime,
-        stops,
-        path,
-        visible: true,
+        id: line.id, name: line.name, stationId: station.id, stationName: station.name,
+        type: station.type, color, startStop: line.startStop, endStop: line.endStop,
+        startTime, endTime, interval, stops, path, visible: true,
       });
       message.success(`已添加 ${line.name}`);
     });
@@ -134,23 +127,15 @@ export default function StationDetail({ station, onRouteAdd }: Props) {
           <List.Item
             style={{ padding: '6px 0' }}
             actions={[
-              <Button
-                size="small"
-                type={isAdded(line.id) ? 'default' : 'primary'}
-                disabled={isAdded(line.id)}
-                onClick={() => handleAdd(line)}
-              >
+              <Button size="small" type={isAdded(line.id) ? 'default' : 'primary'}
+                disabled={isAdded(line.id)} onClick={() => handleAdd(line)}>
                 {isAdded(line.id) ? '已添加' : '添加'}
               </Button>,
             ]}
           >
             <List.Item.Meta
               title={<span style={{ fontSize: 13 }}>{line.name}</span>}
-              description={
-                <span style={{ fontSize: 12 }}>
-                  {line.startTime}–{line.endTime}
-                </span>
-              }
+              description={<span style={{ fontSize: 12 }}>{line.startStop} → {line.endStop}</span>}
             />
           </List.Item>
         )}
