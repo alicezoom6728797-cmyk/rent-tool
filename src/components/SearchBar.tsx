@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { AutoComplete, Cascader, message, Button, Space, Input } from 'antd';
+import { AutoComplete, Cascader, message, Input } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { getAMap, getMap } from '../services/amapService';
 import { useAppStore } from '../stores/appStore';
@@ -134,13 +134,14 @@ export default function SearchBar() {
   };
 
   return (
-    <Space.Compact style={{ width: '100%' }} size="large">
+    <div style={{ display: 'flex', gap: 8 }}>
       <Cascader
         options={CITY_OPTIONS}
         value={getCityPath()}
         onChange={handleCityChange}
         allowClear={false}
         style={{ width: 180 }}
+        size="large"
         placeholder="选择城市"
       />
       <AutoComplete
@@ -149,14 +150,20 @@ export default function SearchBar() {
         value={inputVal}
         onChange={handleInputChange}
         onSelect={(val) => { setInputVal(val); handleSearch(val); }}
+        popupMatchSelectWidth={true}
       >
         <Input
           size="large"
           placeholder="输入地址搜索，如：西湖文化广场"
           onPressEnter={() => handleSearch(inputVal)}
-          suffix={<SearchOutlined style={{ cursor: 'pointer', color: '#1677ff' }} onClick={() => handleSearch(inputVal)} />}
+          suffix={
+            <SearchOutlined
+              style={{ cursor: 'pointer', color: '#1677ff' }}
+              onClick={() => handleSearch(inputVal)}
+            />
+          }
         />
       </AutoComplete>
-    </Space.Compact>
+    </div>
   );
 }
