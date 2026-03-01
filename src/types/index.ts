@@ -1,27 +1,29 @@
+// 周边站点
 export interface StationInfo {
   id: string;
   name: string;
-  location: [number, number]; // [lng, lat]
+  location: [number, number];
   type: 'subway' | 'bus';
-  distance: number; // 米
-  address?: string;
+  distance: number;
 }
 
-export interface RouteInfo {
+// 聚合后的线路（去重后）
+export interface LineInfo {
   id: string;
   name: string;
-  stationId: string;
-  stationName: string;
   type: 'subway' | 'bus';
-  color: string;
+  nearestStation: string;   // 最近的站点名
+  nearestDistance: number;   // 最近站点距离(m)
   startStop: string;
   endStop: string;
   startTime: string;
   endTime: string;
-  interval?: string;
+  interval: string;
   stops: StopInfo[];
-  path?: [number, number][];
+  path: [number, number][];
+  color: string;
   visible: boolean;
+  loaded: boolean;  // 是否已加载完整路线数据
 }
 
 export interface StopInfo {
@@ -29,18 +31,3 @@ export interface StopInfo {
   location?: [number, number];
   sequence: number;
 }
-
-export interface SearchState {
-  address: string;
-  center: [number, number] | null;
-  radius: number;
-  stations: StationInfo[];
-  selectedStation: StationInfo | null;
-  routes: RouteInfo[];
-  loading: boolean;
-}
-
-export const ROUTE_COLORS = [
-  '#1677ff', '#52c41a', '#fa541c', '#722ed1',
-  '#eb2f96', '#faad14', '#13c2c2', '#2f54eb',
-];

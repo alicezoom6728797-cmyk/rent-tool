@@ -3,6 +3,7 @@ import { AutoComplete, Cascader, message, Input } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { getAMap, getMap } from '../services/amapService';
 import { useAppStore } from '../stores/appStore';
+import type { LineInfo, StationInfo } from '../types';
 
 const CITY_OPTIONS = [
   { value: '浙江', label: '浙江', children: [
@@ -31,8 +32,85 @@ const CITY_OPTIONS = [
   { value: '天津', label: '天津', children: [{ value: '天津', label: '天津' }] },
 ];
 
+function parseTimedesc(timedesc: string): { startTime: string; endTime: string; interval: string } {
+  try {
+    const data = JSON.parse(decodeURIComponent(timedesc));
+    const remark = data.allRemark || data.rule_group?.[0]?.remark || '';
+    const times = remark.match(/(\d{2}:\d{2})/g);
+    if (times && times.length >= 2) {
+      return { startTime: times[0], endTime: times[times.length - 1], interval: remark.replace(/\\r\\n/g, ' | ') };
+    }
+  } catch {}
+  return { startTime: '--', endTime: '--', interval: '' };
+}
+
+// 批量查站点线路，去重聚合
+function fetchAllLines(
+  stations: StationInfo[], city: string, AMap: any,
+  onProgress: (lines: LineInfo[], done: boolean) => void,
+  getColor: () => string,
+) {
+  // 对站点名去重（去掉出口后缀），只查唯一站名
+  const stationMap = new Map<string, StationInfo>();
+  stations.forEach((s) => {
+    const key = s.name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+      .replace(/地铁站.*口$/, '').replace(/(地铁站|公交站)$/, '')
+      .replace(/[A-Z]?\d*(东南|西南|东北|西北|东|南|西|北)?口$/, '');
+    if (!stationMap.has(key) || s.distance < stationMap.get(key)!.distance) {
+      stationMap.set(key, s);
+    }
+  });
+
+  const uniqueStations = [...stationMap.entries()];
+  const allLines = new Map<string, LineInfo>();
+  let completed = 0;
+
+  uniqueStations.forEach(([keyword, station]) => {
+    const ss = new AMap.StationSearch({ city });
+    ss.search(keyword, (status: string, result: any) => {
+      if (status === 'complete' && result.stationInfo?.length > 0) {
+        result.stationInfo.forEach((si: any) => {
+          (si.buslines || []).forEach((line: any) => {
+            if (allLines.has(line.id)) {
+              // 如果已有，更新最近距离
+              const existing = allLines.get(line.id)!;
+              if (station.distance < existing.nearestDistance) {
+                existing.nearestStation = station.name;
+                existing.nearestDistance = station.distance;
+              }
+            } else {
+              const isSubway = line.name.includes('地铁') || line.name.includes('号线');
+              allLines.set(line.id, {
+                id: line.id,
+                name: line.name,
+                type: isSubway ? 'subway' : 'bus',
+                nearestStation: station.name,
+                nearestDistance: station.distance,
+                startStop: line.start_stop || '',
+                endStop: line.end_stop || '',
+                startTime: '', endTime: '', interval: '',
+                stops: [], path: [],
+                color: getColor(),
+                visible: isSubway, // 地铁默认显示
+                loaded: false,
+              });
+            }
+          });
+        });
+      }
+      completed++;
+      const sorted = [...allLines.values()].sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'subway' ? -1 : 1;
+        return a.nearestDistance - b.nearestDistance;
+      });
+      onProgress(sorted, completed >= uniqueStations.length);
+    });
+  });
+}
+
 export default function SearchBar() {
-  const { setCenter, setAddress, setStations, setLoading, radius, clearRoutes, city, setCity } = useAppStore();
+  const { setCenter, setAddress, setStations, setLines, setLoading, setLinesLoading,
+    radius, reset, city, setCity, nextColor } = useAppStore();
   const [inputVal, setInputVal] = useState('');
   const [suggestions, setSuggestions] = useState<{ value: string; label: string }[]>([]);
   const timerRef = useRef<any>(null);
@@ -58,13 +136,8 @@ export default function SearchBar() {
     ac.search(keyword, (_status: string, result: any) => {
       if (result?.tips) {
         setSuggestions(
-          result.tips
-            .filter((t: any) => t.name && t.location)
-            .slice(0, 8)
-            .map((t: any) => ({
-              value: t.district + t.name,
-              label: `${t.name}  ${t.district}`,
-            }))
+          result.tips.filter((t: any) => t.name && t.location).slice(0, 8)
+            .map((t: any) => ({ value: t.district + t.name, label: `${t.name}  ${t.district}` }))
         );
       }
     });
@@ -81,7 +154,7 @@ export default function SearchBar() {
     if (!value.trim()) return;
     setSuggestions([]);
     setLoading(true);
-    clearRoutes();
+    reset();
     const AMap = getAMap();
     if (!AMap) { message.error('地图尚未加载'); setLoading(false); return; }
 
@@ -95,8 +168,6 @@ export default function SearchBar() {
         const map = getMap();
         map.setCenter(center);
         map.setZoom(15);
-        map.clearMap();
-        new AMap.Marker({ position: center, map, title: value, zIndex: 200 });
         searchNearbyStations(center, radius, AMap);
       } else {
         message.error('地址解析失败，请尝试更详细的地址');
@@ -105,8 +176,8 @@ export default function SearchBar() {
     });
   };
 
-  const searchNearbyStations = (center: [number, number], radius: number, AMap: any) => {
-    const allStations: any[] = [];
+  const searchNearbyStations = (center: [number, number], r: number, AMap: any) => {
+    const allStations: StationInfo[] = [];
     let completed = 0;
     const types = [
       { code: '150500', type: 'subway' as const },
@@ -114,14 +185,13 @@ export default function SearchBar() {
     ];
     types.forEach(({ code, type }) => {
       const ps = new AMap.PlaceSearch({ type: code, pageSize: 50, pageIndex: 1 });
-      ps.searchNearBy('', center, radius, (status: string, result: any) => {
+      ps.searchNearBy('', center, r, (status: string, result: any) => {
         if (status === 'complete' && result.poiList?.pois) {
           result.poiList.pois.forEach((poi: any) => {
             allStations.push({
               id: poi.id, name: poi.name,
-              location: [poi.location.lng, poi.location.lat] as [number, number],
+              location: [poi.location.lng, poi.location.lat],
               type, distance: Math.round(AMap.GeometryUtil.distance(center, [poi.location.lng, poi.location.lat])),
-              address: poi.address,
             });
           });
         }
@@ -131,6 +201,12 @@ export default function SearchBar() {
           setStations(allStations);
           setLoading(false);
           searchingRef.current = false;
+          // 自动查所有线路
+          setLinesLoading(true);
+          fetchAllLines(allStations, city, AMap, (lines, done) => {
+            setLines(lines);
+            if (done) setLinesLoading(false);
+          }, nextColor);
         }
       });
     });
@@ -138,34 +214,14 @@ export default function SearchBar() {
 
   return (
     <div style={{ display: 'flex', gap: 8 }}>
-      <Cascader
-        options={CITY_OPTIONS}
-        value={getCityPath()}
-        onChange={handleCityChange}
-        allowClear={false}
-        style={{ width: 180 }}
-        size="large"
-        placeholder="选择城市"
-      />
-      <AutoComplete
-        style={{ flex: 1 }}
-        options={suggestions}
-        value={inputVal}
-        onChange={handleInputChange}
-        onSelect={(val) => { searchingRef.current = true; clearTimeout(timerRef.current); setInputVal(val); handleSearch(val); }}
-        popupMatchSelectWidth={true}
-      >
-        <Input
-          size="large"
-          placeholder="输入地址搜索，如：西湖文化广场"
+      <Cascader options={CITY_OPTIONS} value={getCityPath()} onChange={handleCityChange}
+        allowClear={false} style={{ width: 180 }} size="large" placeholder="选择城市" />
+      <AutoComplete style={{ flex: 1 }} options={suggestions} value={inputVal}
+        onChange={handleInputChange} popupMatchSelectWidth={true}
+        onSelect={(val) => { searchingRef.current = true; clearTimeout(timerRef.current); setInputVal(val); handleSearch(val); }}>
+        <Input size="large" placeholder="输入地址搜索，如：西湖文化广场"
           onPressEnter={() => handleSearch(inputVal)}
-          suffix={
-            <SearchOutlined
-              style={{ cursor: 'pointer', color: '#1677ff' }}
-              onClick={() => handleSearch(inputVal)}
-            />
-          }
-        />
+          suffix={<SearchOutlined style={{ cursor: 'pointer', color: '#1677ff' }} onClick={() => handleSearch(inputVal)} />} />
       </AutoComplete>
     </div>
   );

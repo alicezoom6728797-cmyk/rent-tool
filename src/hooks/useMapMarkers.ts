@@ -1,17 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { getAMap, getMap } from '../services/amapService';
 import { useAppStore } from '../stores/appStore';
-import type { StationInfo } from '../types';
 
 function toLngLat(p: any): [number, number] {
   if (Array.isArray(p)) return [Number(p[0]), Number(p[1])];
   return [Number(p.lng ?? p.getLng()), Number(p.lat ?? p.getLat())];
 }
 
-export function useMapMarkers(onStationClick: (s: StationInfo) => void) {
+export function useMapMarkers() {
   const stations = useAppStore((s) => s.stations);
   const center = useAppStore((s) => s.center);
-  const routes = useAppStore((s) => s.routes);
+  const lines = useAppStore((s) => s.lines);
 
   const markersRef = useRef<any[]>([]);
   const routeOverlaysRef = useRef<any[]>([]);
@@ -35,16 +34,15 @@ export function useMapMarkers(onStationClick: (s: StationInfo) => void) {
       });
     }
 
-    stations.forEach((station) => {
-      const c = station.type === 'subway' ? '#1677ff' : '#52c41a';
-      const r = station.type === 'subway' ? '50%' : '3px';
+    stations.forEach((s) => {
+      const c = s.type === 'subway' ? '#1677ff' : '#52c41a';
+      const r = s.type === 'subway' ? '50%' : '3px';
       const marker = new AMap.Marker({
-        position: station.location, map, zIndex: 100,
-        content: `<div style="width:14px;height:14px;background:${c};border:2px solid #fff;border-radius:${r};box-shadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer"></div>`,
-        offset: new AMap.Pixel(-7, -7),
-        title: `${station.name} (${station.distance}m)`,
+        position: s.location, map, zIndex: 100,
+        content: `<div style="width:12px;height:12px;background:${c};border:2px solid #fff;border-radius:${r};box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>`,
+        offset: new AMap.Pixel(-6, -6),
+        title: `${s.name} (${s.distance}m)`,
       });
-      marker.on('click', () => onStationClick(station));
       markersRef.current.push(marker);
     });
   }, [stations, center]);
@@ -58,22 +56,22 @@ export function useMapMarkers(onStationClick: (s: StationInfo) => void) {
     routeOverlaysRef.current.forEach((o) => { try { map.remove(o); } catch {} });
     routeOverlaysRef.current = [];
 
-    const visibleRoutes = routes.filter((r) => r.visible && r.path && r.path.length > 1);
-    visibleRoutes.forEach((route) => {
-      const path = route.path!.map(toLngLat);
+    const visibleLines = lines.filter((l) => l.visible && l.loaded && l.path.length > 1);
 
+    visibleLines.forEach((line) => {
+      const path = line.path.map(toLngLat);
       const polyline = new AMap.Polyline({
-        path, strokeColor: route.color, strokeWeight: 5,
+        path, strokeColor: line.color, strokeWeight: 5,
         strokeOpacity: 0.8, lineJoin: 'round', lineCap: 'round', zIndex: 50,
       });
       polyline.setMap(map);
       routeOverlaysRef.current.push(polyline);
 
-      route.stops.forEach((stop) => {
+      line.stops.forEach((stop) => {
         if (!stop.location) return;
         const dot = new AMap.CircleMarker({
           center: toLngLat(stop.location), radius: 4,
-          fillColor: route.color, fillOpacity: 1,
+          fillColor: line.color, fillOpacity: 1,
           strokeColor: '#fff', strokeWeight: 1, zIndex: 60,
         });
         dot.setMap(map);
@@ -81,9 +79,8 @@ export function useMapMarkers(onStationClick: (s: StationInfo) => void) {
       });
     });
 
-    // 有路线时自动调整视野让路线可见
     if (routeOverlaysRef.current.length > 0) {
       map.setFitView(routeOverlaysRef.current, false, [60, 60, 60, 400]);
     }
-  }, [routes]);
+  }, [lines]);
 }
