@@ -79,7 +79,7 @@ function fetchAllLines(
                 existing.nearestDistance = station.distance;
               }
             } else {
-              const isSubway = station.type === 'subway' || /\d+号线/.test(line.name);
+              const isSubway = /\d+号线/.test(line.name);
               allLines.set(line.id, {
                 id: line.id,
                 name: line.name,
