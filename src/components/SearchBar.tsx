@@ -44,7 +44,7 @@ function parseTimedesc(timedesc: string): { startTime: string; endTime: string; 
   return { startTime: '--', endTime: '--', interval: '' };
 }
 
-// 批量查站点线路，基于站点位置而非站点名
+// 批量查站点线路，按站名搜索后按位置过滤（排除同名远距离站点）
 function fetchAllLines(
   stations: StationInfo[], city: string, AMap: any,
   onProgress: (lines: LineInfo[], done: boolean) => void,
@@ -53,43 +53,54 @@ function fetchAllLines(
   const allLines = new Map<string, LineInfo>();
   let completed = 0;
 
+  const processResult = (station: StationInfo, stationInfos: any[]) => {
+    const nearby = stationInfos.filter((si: any) => {
+      if (!si.location) return false;
+      const dist = AMap.GeometryUtil.distance(
+        station.location,
+        [si.location.lng, si.location.lat],
+      );
+      return dist < 200;
+    });
+    nearby.forEach((si: any) => {
+      (si.buslines || []).forEach((line: any) => {
+        const baseName = line.name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+          .replace(/(上行|下行)$/, '').trim();
+        const stops = [line.start_stop || '', line.end_stop || ''].sort();
+        const mergeKey = `${baseName}_${stops[0]}_${stops[1]}`;
+
+        if (allLines.has(mergeKey)) {
+          const existing = allLines.get(mergeKey)!;
+          if (station.distance < existing.nearestDistance) {
+            existing.nearestStation = station.name;
+            existing.nearestDistance = station.distance;
+          }
+        } else {
+          const isSubway = /\d+号线/.test(line.name);
+          allLines.set(mergeKey, {
+            id: line.id,
+            name: baseName,
+            type: isSubway ? 'subway' : 'bus',
+            nearestStation: station.name,
+            nearestDistance: station.distance,
+            startStop: line.start_stop || '',
+            endStop: line.end_stop || '',
+            startTime: '', endTime: '', interval: '',
+            stops: [], path: [],
+            color: getColor(),
+            visible: false,
+            loaded: false,
+          });
+        }
+      });
+    });
+  };
+
   stations.forEach((station) => {
     const ss = new AMap.StationSearch({ city, pageSize: 50 });
-    // 使用 searchNearBy 在站点位置附近搜索，半径50米
-    ss.searchNearBy('', station.location, 50, (status: string, result: any) => {
+    ss.search(station.name, (status: string, result: any) => {
       if (status === 'complete' && result.stationInfo?.length > 0) {
-        result.stationInfo.forEach((si: any) => {
-          (si.buslines || []).forEach((line: any) => {
-            const baseName = line.name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
-              .replace(/(上行|下行)$/, '').trim();
-            const stops = [line.start_stop || '', line.end_stop || ''].sort();
-            const mergeKey = `${baseName}_${stops[0]}_${stops[1]}`;
-            
-            if (allLines.has(mergeKey)) {
-              const existing = allLines.get(mergeKey)!;
-              if (station.distance < existing.nearestDistance) {
-                existing.nearestStation = station.name;
-                existing.nearestDistance = station.distance;
-              }
-            } else {
-              const isSubway = /\d+号线/.test(line.name);
-              allLines.set(mergeKey, {
-                id: line.id,
-                name: baseName,
-                type: isSubway ? 'subway' : 'bus',
-                nearestStation: station.name,
-                nearestDistance: station.distance,
-                startStop: line.start_stop || '',
-                endStop: line.end_stop || '',
-                startTime: '', endTime: '', interval: '',
-                stops: [], path: [],
-                color: getColor(),
-                visible: false,
-                loaded: false,
-              });
-            }
-          });
-        });
+        processResult(station, result.stationInfo);
       }
       completed++;
       const sorted = [...allLines.values()].sort((a, b) => {
@@ -190,13 +201,11 @@ export default function SearchBar() {
         }
         completed++;
         if (completed >= types.length) {
-          // 过滤掉超出半径的站点
           const filteredStations = allStations.filter((s) => s.distance <= r);
           filteredStations.sort((a, b) => a.distance - b.distance);
           setStations(filteredStations);
           setLoading(false);
           searchingRef.current = false;
-          // 自动查所有线路
           setLinesLoading(true);
           fetchAllLines(filteredStations, city, AMap, (lines, done) => {
             setLines(lines);
