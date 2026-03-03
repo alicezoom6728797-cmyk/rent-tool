@@ -203,13 +203,15 @@ export default function SearchBar() {
         }
         completed++;
         if (completed >= types.length) {
-          allStations.sort((a, b) => a.distance - b.distance);
-          setStations(allStations);
+          // 过滤掉超出半径的站点
+          const filteredStations = allStations.filter((s) => s.distance <= r);
+          filteredStations.sort((a, b) => a.distance - b.distance);
+          setStations(filteredStations);
           setLoading(false);
           searchingRef.current = false;
           // 自动查所有线路
           setLinesLoading(true);
-          fetchAllLines(allStations, city, AMap, (lines, done) => {
+          fetchAllLines(filteredStations, city, AMap, (lines, done) => {
             setLines(lines);
             if (done) setLinesLoading(false);
           }, nextColor);
