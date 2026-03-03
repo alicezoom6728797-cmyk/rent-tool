@@ -19,7 +19,10 @@ function AppContent() {
         borderRight: '1px solid #f0f0f0', overflow: 'hidden',
       }}>
         <div style={{ padding: 16, borderBottom: '1px solid #f0f0f0' }}>
-          <Title level={4} style={{ margin: '0 0 12px 0' }}>🏠 租房交通助手</Title>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Title level={4} style={{ margin: 0 }}>🏠 租房交通助手</Title>
+            <span style={{ fontSize: 12, color: '#999' }}>v0.01</span>
+          </div>
           <SearchBar />
           <div style={{ marginTop: 12 }}><RadiusControl /></div>
         </div>
