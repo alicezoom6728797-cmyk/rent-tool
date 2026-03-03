@@ -62,41 +62,57 @@ export const useAppStore = create<AppState>((set, get) => ({
   })),
   loadLineDetails: (ids: string[]) => {
     const state = get();
-    ids.forEach((id) => {
-      const line = state.lines.find((l) => l.id === id);
-      if (!line || line.loaded) return;
+    // 限制并发数，每次只加载 3 条
+    const batchSize = 3;
+    let index = 0;
+    
+    const loadBatch = () => {
+      const batch = ids.slice(index, index + batchSize);
+      if (batch.length === 0) return;
       
-      const AMap = (window as any).AMap;
-      if (!AMap) return;
-      
-      const ls = new AMap.LineSearch({ city: state.city, extensions: 'all' });
-      ls.searchById(id, (status: string, result: any) => {
-        if (status === 'complete' && result.lineInfo?.length > 0) {
-          const info = result.lineInfo[0];
-          const path = (info.path || []).map((p: any) => [Number(p.lng), Number(p.lat)] as [number, number]);
-          const stops = (info.via_stops || []).map((s: any, i: number) => ({
-            name: s.name,
-            location: s.location ? [Number(s.location.lng), Number(s.location.lat)] as [number, number] : undefined,
-            sequence: i + 1,
-          }));
-          
-          let startTime = '--', endTime = '--';
-          if (info.timedesc) {
-            try {
-              const data = JSON.parse(decodeURIComponent(info.timedesc));
-              const remark = data.allRemark || data.rule_group?.[0]?.remark || '';
-              const times = remark.match(/(\d{2}:\d{2})/g);
-              if (times && times.length >= 2) {
-                startTime = times[0];
-                endTime = times[times.length - 1];
-              }
-            } catch {}
+      batch.forEach((id) => {
+        const line = state.lines.find((l) => l.id === id);
+        if (!line || line.loaded) return;
+        
+        const AMap = (window as any).AMap;
+        if (!AMap) return;
+        
+        const ls = new AMap.LineSearch({ city: state.city, extensions: 'all' });
+        ls.searchById(id, (status: string, result: any) => {
+          if (status === 'complete' && result.lineInfo?.length > 0) {
+            const info = result.lineInfo[0];
+            const path = (info.path || []).map((p: any) => [Number(p.lng), Number(p.lat)] as [number, number]);
+            const stops = (info.via_stops || []).map((s: any, i: number) => ({
+              name: s.name,
+              location: s.location ? [Number(s.location.lng), Number(s.location.lat)] as [number, number] : undefined,
+              sequence: i + 1,
+            }));
+            
+            let startTime = '--', endTime = '--';
+            if (info.timedesc) {
+              try {
+                const data = JSON.parse(decodeURIComponent(info.timedesc));
+                const remark = data.allRemark || data.rule_group?.[0]?.remark || '';
+                const times = remark.match(/(\d{2}:\d{2})/g);
+                if (times && times.length >= 2) {
+                  startTime = times[0];
+                  endTime = times[times.length - 1];
+                }
+              } catch {}
+            }
+            
+            get().updateLine(id, { path, stops, startTime, endTime, loaded: true });
           }
-          
-          get().updateLine(id, { path, stops, startTime, endTime, loaded: true });
-        }
+        });
       });
-    });
+      
+      index += batchSize;
+      if (index < ids.length) {
+        setTimeout(loadBatch, 500);
+      }
+    };
+    
+    loadBatch();
   },
   setLoading: (loading) => set({ loading }),
   setLinesLoading: (linesLoading) => set({ linesLoading }),

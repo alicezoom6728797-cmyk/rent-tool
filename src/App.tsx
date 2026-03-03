@@ -21,7 +21,7 @@ function AppContent() {
         <div style={{ padding: 16, borderBottom: '1px solid #f0f0f0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <Title level={4} style={{ margin: 0 }}>🏠 租房交通助手</Title>
-            <span style={{ fontSize: 12, color: '#999' }}>v0.0.1</span>
+            <span style={{ fontSize: 12, color: '#999' }}>v0.0.2</span>
           </div>
           <SearchBar />
           <div style={{ marginTop: 12 }}><RadiusControl /></div>
