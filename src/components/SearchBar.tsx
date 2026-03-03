@@ -5,7 +5,7 @@ import { getAMap, getMap } from '../services/amapService';
 import { useAppStore } from '../stores/appStore';
 import type { LineInfo, StationInfo } from '../types';
 
-const CITY_OPTIONS = [
+const CITY_OPTIONS: { value: string; label: string; children?: { value: string; label: string }[] }[] = [
   { value: '浙江', label: '浙江', children: [
     { value: '杭州', label: '杭州' }, { value: '宁波', label: '宁波' },
     { value: '温州', label: '温州' }, { value: '嘉兴', label: '嘉兴' },
@@ -31,18 +31,6 @@ const CITY_OPTIONS = [
   { value: '重庆', label: '重庆', children: [{ value: '重庆', label: '重庆' }] },
   { value: '天津', label: '天津', children: [{ value: '天津', label: '天津' }] },
 ];
-
-function parseTimedesc(timedesc: string): { startTime: string; endTime: string; interval: string } {
-  try {
-    const data = JSON.parse(decodeURIComponent(timedesc));
-    const remark = data.allRemark || data.rule_group?.[0]?.remark || '';
-    const times = remark.match(/(\d{2}:\d{2})/g);
-    if (times && times.length >= 2) {
-      return { startTime: times[0], endTime: times[times.length - 1], interval: remark.replace(/\\r\\n/g, ' | ') };
-    }
-  } catch {}
-  return { startTime: '--', endTime: '--', interval: '' };
-}
 
 // 批量查站点线路，按站名搜索后按位置过滤（排除同名远距离站点）
 function fetchAllLines(
@@ -76,7 +64,7 @@ function fetchAllLines(
             existing.nearestDistance = station.distance;
           }
         } else {
-          const isSubway = /\d+号线/.test(line.name);
+          const isSubway = /^(地铁)?\d+号线/.test(baseName);
           allLines.set(mergeKey, {
             id: line.id,
             name: baseName,
@@ -176,6 +164,7 @@ export default function SearchBar() {
       } else {
         message.error('地址解析失败，请尝试更详细的地址');
         setLoading(false);
+        searchingRef.current = false;
       }
     });
   };

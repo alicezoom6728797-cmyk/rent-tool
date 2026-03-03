@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { getAMap } from '../services/amapService';
+import { parseTimedesc } from '../utils/timedesc';
 import type { StationInfo, LineInfo } from '../types';
 
 const COLORS = [
@@ -6,6 +8,8 @@ const COLORS = [
   '#eb2f96', '#faad14', '#13c2c2', '#2f54eb',
   '#f5222d', '#a0d911', '#1890ff', '#fa8c16',
 ];
+
+let cancelLineLoadingFn: (() => void) | null = null;
 
 interface AppState {
   city: string;
@@ -30,7 +34,6 @@ interface AppState {
   toggleAllLines: (type: 'subway' | 'bus', visible: boolean) => void;
   loadLineDetails: (ids: string[]) => void;
   cancelLoading: () => void;
-  setLoadingProgress: (progress: { current: number; total: number } | null) => void;
   setLoading: (l: boolean) => void;
   setLinesLoading: (l: boolean) => void;
   reset: () => void;
@@ -66,19 +69,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   })),
   loadLineDetails: (ids: string[]) => {
     const state = get();
+    const AMap = getAMap();
+    if (!AMap) {
+      set({ loadingProgress: null });
+      return;
+    }
+
     let cancelled = false;
     let completed = 0;
-    
+
     set({ loadingProgress: { current: 0, total: ids.length } });
-    
-    (window as any).__cancelLineLoading = () => {
+
+    cancelLineLoadingFn = () => {
       cancelled = true;
       set({ loadingProgress: null });
     };
-    
+
     ids.forEach((id) => {
       if (cancelled) return;
-      
+
       const line = state.lines.find((l) => l.id === id);
       if (!line || line.loaded) {
         completed++;
@@ -86,14 +95,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (completed >= ids.length) set({ loadingProgress: null });
         return;
       }
-      
-      const AMap = (window as any).AMap;
-      if (!AMap) return;
-      
+
       const ls = new AMap.LineSearch({ city: state.city, extensions: 'all' });
       ls.searchById(id, (status: string, result: any) => {
         if (cancelled) return;
-        
+
         if (status === 'complete' && result.lineInfo?.length > 0) {
           const info = result.lineInfo[0];
           const path = (info.path || []).map((p: any) => [Number(p.lng), Number(p.lat)] as [number, number]);
@@ -102,25 +108,19 @@ export const useAppStore = create<AppState>((set, get) => ({
             location: s.location ? [Number(s.location.lng), Number(s.location.lat)] as [number, number] : undefined,
             sequence: i + 1,
           }));
-          
-          let startTime = '--', endTime = '--';
+
+          let startTime = '--', endTime = '--', interval = '';
           if (info.timedesc) {
-            try {
-              const data = JSON.parse(decodeURIComponent(info.timedesc));
-              const remark = data.allRemark || data.rule_group?.[0]?.remark || '';
-              const times = remark.match(/(\d{2}:\d{2})/g);
-              if (times && times.length >= 2) {
-                startTime = times[0];
-                endTime = times[times.length - 1];
-              }
-            } catch {}
+            const t = parseTimedesc(info.timedesc);
+            startTime = t.startTime;
+            endTime = t.endTime;
+            interval = t.interval;
           }
-          
-          get().updateLine(id, { path, stops, startTime, endTime, loaded: true });
+
+          get().updateLine(id, { path, stops, startTime, endTime, interval, loaded: true });
         }
-        
+
         completed++;
-        const current = get();
         set({ loadingProgress: { current: completed, total: ids.length } });
         if (completed >= ids.length) {
           set({ loadingProgress: null });
@@ -129,11 +129,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
   cancelLoading: () => {
-    if ((window as any).__cancelLineLoading) {
-      (window as any).__cancelLineLoading();
+    if (cancelLineLoadingFn) {
+      cancelLineLoadingFn();
+      cancelLineLoadingFn = null;
     }
   },
-  setLoadingProgress: (progress) => set({ loadingProgress: progress }),
   setLoading: (loading) => set({ loading }),
   setLinesLoading: (linesLoading) => set({ linesLoading }),
   reset: () => set({ stations: [], lines: [], colorIndex: 0, linesLoading: false }),

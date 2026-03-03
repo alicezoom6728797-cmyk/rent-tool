@@ -1,21 +1,10 @@
 import { Switch, Collapse, Tag, Spin, Empty, Typography, Button, Space } from 'antd';
 import { useAppStore } from '../stores/appStore';
 import { getAMap } from '../services/amapService';
+import { parseTimedesc } from '../utils/timedesc';
 import type { LineInfo } from '../types';
 
 const { Text } = Typography;
-
-function parseTimedesc(timedesc: string): { startTime: string; endTime: string; interval: string } {
-  try {
-    const data = JSON.parse(decodeURIComponent(timedesc));
-    const remark = data.allRemark || data.rule_group?.[0]?.remark || '';
-    const times = remark.match(/(\d{2}:\d{2})/g);
-    if (times && times.length >= 2) {
-      return { startTime: times[0], endTime: times[times.length - 1], interval: remark.replace(/\\r\\n/g, ' | ') };
-    }
-  } catch {}
-  return { startTime: '--', endTime: '--', interval: '' };
-}
 
 function loadLineDetail(line: LineInfo, city: string, onDone: (patch: Partial<LineInfo>) => void) {
   const AMap = getAMap();
@@ -75,6 +64,9 @@ function LineItem({ line }: { line: LineInfo }) {
   );
 }
 
+const isRegularBus = (name: string) =>
+  /^\d+[A-Za-z]*路/.test(name) || /^[A-Za-z]\d+路/.test(name);
+
 export default function LineList() {
   const lines = useAppStore((s) => s.lines);
   const linesLoading = useAppStore((s) => s.linesLoading);
@@ -83,6 +75,8 @@ export default function LineList() {
 
   const subwayLines = lines.filter((l) => l.type === 'subway');
   const busLines = lines.filter((l) => l.type === 'bus');
+  const regularBusLines = busLines.filter((l) => isRegularBus(l.name));
+  const specialBusLines = busLines.filter((l) => !isRegularBus(l.name));
 
   const handleSelectAll = (type: 'subway' | 'bus') => {
     const targetLines = type === 'subway' ? subwayLines : busLines;
@@ -91,6 +85,20 @@ export default function LineList() {
       loadLineDetails(unloadedIds);
     }
     toggleAllLines(type, true);
+  };
+
+  const handleSelectAllGroup = (groupLines: LineInfo[]) => {
+    const unloadedIds = groupLines.filter((l) => !l.loaded).map((l) => l.id);
+    if (unloadedIds.length > 0) loadLineDetails(unloadedIds);
+    groupLines.forEach((l) => {
+      if (!l.visible) useAppStore.getState().toggleLineVisible(l.id);
+    });
+  };
+
+  const handleClearGroup = (groupLines: LineInfo[]) => {
+    groupLines.forEach((l) => {
+      if (l.visible) useAppStore.getState().toggleLineVisible(l.id);
+    });
   };
 
   if (lines.length === 0 && !linesLoading) {
@@ -123,20 +131,38 @@ export default function LineList() {
         />
       )}
 
-      {busLines.length > 0 && (
-        <Collapse size="small" defaultActiveKey={[]} ghost
+      {regularBusLines.length > 0 && (
+        <Collapse size="small" defaultActiveKey={['bus']} ghost
           items={[{
             key: 'bus',
             label: (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text strong>🚌 公交线路 ({busLines.length})</Text>
+                <Text strong>🚌 常规公交 ({regularBusLines.length})</Text>
                 <Space size={4} onClick={(e) => e.stopPropagation()}>
-                  <Button size="small" type="link" onClick={() => handleSelectAll('bus')}>全选</Button>
-                  <Button size="small" type="link" onClick={() => toggleAllLines('bus', false)}>清空</Button>
+                  <Button size="small" type="link" onClick={() => handleSelectAllGroup(regularBusLines)}>全选</Button>
+                  <Button size="small" type="link" onClick={() => handleClearGroup(regularBusLines)}>清空</Button>
                 </Space>
               </div>
             ),
-            children: busLines.map((l) => <LineItem key={l.id} line={l} />),
+            children: regularBusLines.map((l) => <LineItem key={l.id} line={l} />),
+          }]}
+        />
+      )}
+
+      {specialBusLines.length > 0 && (
+        <Collapse size="small" defaultActiveKey={[]} ghost
+          items={[{
+            key: 'special',
+            label: (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text strong style={{ color: '#999' }}>🚐 专线/长途 ({specialBusLines.length})</Text>
+                <Space size={4} onClick={(e) => e.stopPropagation()}>
+                  <Button size="small" type="link" onClick={() => handleSelectAllGroup(specialBusLines)}>全选</Button>
+                  <Button size="small" type="link" onClick={() => handleClearGroup(specialBusLines)}>清空</Button>
+                </Space>
+              </div>
+            ),
+            children: specialBusLines.map((l) => <LineItem key={l.id} line={l} />),
           }]}
         />
       )}

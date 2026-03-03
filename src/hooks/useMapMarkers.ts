@@ -25,8 +25,11 @@ export function useMapMarkers() {
     markersRef.current.forEach((m) => map.remove(m));
     markersRef.current = [];
 
+    if (centerMarkerRef.current) {
+      map.remove(centerMarkerRef.current);
+      centerMarkerRef.current = null;
+    }
     if (center) {
-      if (centerMarkerRef.current) map.remove(centerMarkerRef.current);
       centerMarkerRef.current = new AMap.Marker({
         position: center, map, zIndex: 200,
         content: '<div style="width:20px;height:20px;background:#ff4d4f;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>',
