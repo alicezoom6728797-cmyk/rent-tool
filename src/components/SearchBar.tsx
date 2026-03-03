@@ -71,18 +71,22 @@ function fetchAllLines(
       if (status === 'complete' && result.stationInfo?.length > 0) {
         result.stationInfo.forEach((si: any) => {
           (si.buslines || []).forEach((line: any) => {
-            if (allLines.has(line.id)) {
-              // 如果已有，更新最近距离
-              const existing = allLines.get(line.id)!;
+            // 合并往返线路：去掉括号内容和上行/下行后缀
+            const baseName = line.name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+              .replace(/(上行|下行)$/, '').trim();
+            const mergeKey = `${baseName}_${line.start_stop}_${line.end_stop}`;
+            
+            if (allLines.has(mergeKey)) {
+              const existing = allLines.get(mergeKey)!;
               if (station.distance < existing.nearestDistance) {
                 existing.nearestStation = station.name;
                 existing.nearestDistance = station.distance;
               }
             } else {
               const isSubway = /\d+号线/.test(line.name);
-              allLines.set(line.id, {
+              allLines.set(mergeKey, {
                 id: line.id,
-                name: line.name,
+                name: baseName,
                 type: isSubway ? 'subway' : 'bus',
                 nearestStation: station.name,
                 nearestDistance: station.distance,
@@ -91,7 +95,7 @@ function fetchAllLines(
                 startTime: '', endTime: '', interval: '',
                 stops: [], path: [],
                 color: getColor(),
-                visible: isSubway, // 地铁默认显示
+                visible: false,
                 loaded: false,
               });
             }

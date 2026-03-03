@@ -1,4 +1,4 @@
-import { Switch, Collapse, Tag, Spin, Empty, Typography } from 'antd';
+import { Switch, Collapse, Tag, Spin, Empty, Typography, Button, Space } from 'antd';
 import { useAppStore } from '../stores/appStore';
 import { getAMap } from '../services/amapService';
 import type { LineInfo } from '../types';
@@ -17,7 +17,6 @@ function parseTimedesc(timedesc: string): { startTime: string; endTime: string; 
   return { startTime: '--', endTime: '--', interval: '' };
 }
 
-// 懒加载线路完整数据（路径+站点+时刻）
 function loadLineDetail(line: LineInfo, city: string, onDone: (patch: Partial<LineInfo>) => void) {
   const AMap = getAMap();
   if (!AMap) return;
@@ -44,14 +43,15 @@ function loadLineDetail(line: LineInfo, city: string, onDone: (patch: Partial<Li
 }
 
 function LineItem({ line }: { line: LineInfo }) {
-  const { toggleLineVisible, updateLine, city } = useAppStore();
+  const city = useAppStore((s) => s.city);
+  const updateLine = useAppStore((s) => s.updateLine);
+  const toggleLineVisible = useAppStore((s) => s.toggleLineVisible);
 
   const handleToggle = (checked: boolean) => {
-    toggleLineVisible(line.id);
-    // 首次开启时懒加载完整路线数据
     if (checked && !line.loaded) {
       loadLineDetail(line, city, (patch) => updateLine(line.id, patch));
     }
+    toggleLineVisible(line.id);
   };
 
   return (
@@ -76,10 +76,22 @@ function LineItem({ line }: { line: LineInfo }) {
 }
 
 export default function LineList() {
-  const { lines, linesLoading } = useAppStore();
+  const lines = useAppStore((s) => s.lines);
+  const linesLoading = useAppStore((s) => s.linesLoading);
+  const toggleAllLines = useAppStore((s) => s.toggleAllLines);
+  const loadLineDetails = useAppStore((s) => s.loadLineDetails);
 
   const subwayLines = lines.filter((l) => l.type === 'subway');
   const busLines = lines.filter((l) => l.type === 'bus');
+
+  const handleSelectAll = (type: 'subway' | 'bus') => {
+    const targetLines = type === 'subway' ? subwayLines : busLines;
+    const unloadedIds = targetLines.filter((l) => !l.loaded).map((l) => l.id);
+    if (unloadedIds.length > 0) {
+      loadLineDetails(unloadedIds);
+    }
+    toggleAllLines(type, true);
+  };
 
   if (lines.length === 0 && !linesLoading) {
     return <Empty description="搜索地址后自动查询周边线路" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
@@ -97,7 +109,15 @@ export default function LineList() {
         <Collapse size="small" defaultActiveKey={['subway']} ghost
           items={[{
             key: 'subway',
-            label: <Text strong>🚇 地铁线路 ({subwayLines.length})</Text>,
+            label: (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text strong>🚇 地铁线路 ({subwayLines.length})</Text>
+                <Space size={4} onClick={(e) => e.stopPropagation()}>
+                  <Button size="small" type="link" onClick={() => handleSelectAll('subway')}>全选</Button>
+                  <Button size="small" type="link" onClick={() => toggleAllLines('subway', false)}>清空</Button>
+                </Space>
+              </div>
+            ),
             children: subwayLines.map((l) => <LineItem key={l.id} line={l} />),
           }]}
         />
@@ -107,7 +127,15 @@ export default function LineList() {
         <Collapse size="small" defaultActiveKey={[]} ghost
           items={[{
             key: 'bus',
-            label: <Text strong>🚌 公交线路 ({busLines.length})</Text>,
+            label: (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text strong>🚌 公交线路 ({busLines.length})</Text>
+                <Space size={4} onClick={(e) => e.stopPropagation()}>
+                  <Button size="small" type="link" onClick={() => handleSelectAll('bus')}>全选</Button>
+                  <Button size="small" type="link" onClick={() => toggleAllLines('bus', false)}>清空</Button>
+                </Space>
+              </div>
+            ),
             children: busLines.map((l) => <LineItem key={l.id} line={l} />),
           }]}
         />
