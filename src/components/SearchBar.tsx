@@ -74,7 +74,9 @@ function fetchAllLines(
             // 合并往返线路：去掉括号内容和上行/下行后缀
             const baseName = line.name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
               .replace(/(上行|下行)$/, '').trim();
-            const mergeKey = `${baseName}_${line.start_stop}_${line.end_stop}`;
+            // 标准化起终点顺序，避免往返重复
+            const stops = [line.start_stop || '', line.end_stop || ''].sort();
+            const mergeKey = `${baseName}_${stops[0]}_${stops[1]}`;
             
             if (allLines.has(mergeKey)) {
               const existing = allLines.get(mergeKey)!;

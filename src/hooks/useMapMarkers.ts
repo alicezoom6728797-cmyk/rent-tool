@@ -57,12 +57,8 @@ export function useMapMarkers() {
     routeOverlaysRef.current = [];
 
     const visibleLines = lines.filter((l) => l.visible && l.loaded && l.path.length > 1);
-    
-    // 限制同时显示的路线数量，避免卡顿
-    const maxLines = 15;
-    const linesToShow = visibleLines.slice(0, maxLines);
 
-    linesToShow.forEach((line) => {
+    visibleLines.forEach((line) => {
       const path = line.path.map(toLngLat);
       const polyline = new AMap.Polyline({
         path, strokeColor: line.color, strokeWeight: 5,
@@ -71,9 +67,7 @@ export function useMapMarkers() {
       polyline.setMap(map);
       routeOverlaysRef.current.push(polyline);
 
-      // 只绘制部分站点，避免过多标记
-      const stopsToShow = line.stops.filter((_, i) => i % 3 === 0 || i === 0 || i === line.stops.length - 1);
-      stopsToShow.forEach((stop) => {
+      line.stops.forEach((stop) => {
         if (!stop.location) return;
         const dot = new AMap.CircleMarker({
           center: toLngLat(stop.location), radius: 4,
