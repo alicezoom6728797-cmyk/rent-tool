@@ -5,6 +5,7 @@ import SearchBar from './components/SearchBar';
 import LineList from './components/LineList';
 import RadiusControl from './components/RadiusControl';
 import LoadingProgress from './components/LoadingProgress';
+import RulerTool from './components/RulerTool';
 import { useMapMarkers } from './hooks/useMapMarkers';
 
 declare const __APP_VERSION__: string;
@@ -35,6 +36,7 @@ function AppContent() {
       </div>
       <div style={{ flex: 1, position: 'relative' }}>
         <MapContainer />
+        <RulerTool />
       </div>
     </div>
   );
