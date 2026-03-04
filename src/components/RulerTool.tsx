@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { getAMap, getMap, onMapReady } from '../services/amapService';
 
-type MeasureState = 'idle' | 'first' | 'second';
+type MeasureState = 'idle' | 'measuring';
 
 function formatDistance(meters: number): string {
   if (meters >= 1000) return (meters / 1000).toFixed(2) + ' km';
@@ -19,16 +19,25 @@ function estimateTime(meters: number, speedKmh: number): string {
   return `${Math.round(minutes)} 分钟`;
 }
 
+function calcTotalDistance(AMap: any, points: [number, number][]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += AMap.GeometryUtil.distance(points[i - 1], points[i]);
+  }
+  return total;
+}
+
 export default function RulerTool() {
   const [state, setState] = useState<MeasureState>('idle');
   const [distance, setDistance] = useState<number | null>(null);
+  const [pointCount, setPointCount] = useState(0);
   const [mapAvailable, setMapAvailable] = useState(false);
 
   const overlaysRef = useRef<any[]>([]);
   const pointsRef = useRef<[number, number][]>([]);
+  const polylineRef = useRef<any>(null);
   const clickHandlerRef = useRef<((e: any) => void) | null>(null);
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const rightClickHandlerRef = useRef<((e: any) => void) | null>(null);
 
   useEffect(() => {
     onMapReady(() => setMapAvailable(true));
@@ -39,21 +48,36 @@ export default function RulerTool() {
     if (!map) return;
     overlaysRef.current.forEach((o) => { try { map.remove(o); } catch {} });
     overlaysRef.current = [];
+    if (polylineRef.current) {
+      try { map.remove(polylineRef.current); } catch {}
+      polylineRef.current = null;
+    }
   }, []);
 
-  const cleanup = useCallback(() => {
+  const detachMapEvents = useCallback(() => {
     const map = getMap();
-    if (map && clickHandlerRef.current) {
+    if (!map) return;
+    if (clickHandlerRef.current) {
       map.off('click', clickHandlerRef.current);
       clickHandlerRef.current = null;
     }
+    if (rightClickHandlerRef.current) {
+      map.off('rightclick', rightClickHandlerRef.current);
+      rightClickHandlerRef.current = null;
+    }
+  }, []);
+
+  const cleanup = useCallback(() => {
+    detachMapEvents();
     clearOverlays();
     pointsRef.current = [];
     setDistance(null);
+    setPointCount(0);
+    const map = getMap();
     if (map) map.setDefaultCursor('default');
-  }, [clearOverlays]);
+  }, [clearOverlays, detachMapEvents]);
 
-  const addPointMarker = useCallback((pos: [number, number], label: string) => {
+  const addPointMarker = useCallback((pos: [number, number], index: number) => {
     const AMap = getAMap();
     const map = getMap();
     if (!AMap || !map) return;
@@ -65,29 +89,48 @@ export default function RulerTool() {
         box-shadow:0 2px 8px rgba(0,0,0,0.3);
         display:flex;align-items:center;justify-content:center;
         font-size:11px;color:#fff;font-weight:700;
-      ">${label}</div>`,
+      ">${index + 1}</div>`,
       offset: new AMap.Pixel(-11, -11),
     });
     overlaysRef.current.push(marker);
   }, []);
 
-  const drawLine = useCallback((p1: [number, number], p2: [number, number]) => {
+  const updatePolyline = useCallback(() => {
+    const AMap = getAMap();
+    const map = getMap();
+    if (!AMap || !map || pointsRef.current.length < 2) return;
+
+    if (polylineRef.current) {
+      polylineRef.current.setPath(pointsRef.current);
+    } else {
+      polylineRef.current = new AMap.Polyline({
+        path: pointsRef.current,
+        strokeColor: '#1677ff',
+        strokeWeight: 3,
+        strokeStyle: 'dashed',
+        strokeDasharray: [8, 6],
+        strokeOpacity: 0.8,
+        zIndex: 290,
+      });
+      polylineRef.current.setMap(map);
+    }
+
+    setDistance(calcTotalDistance(AMap, pointsRef.current));
+  }, []);
+
+  const finishMeasure = useCallback(() => {
     const AMap = getAMap();
     const map = getMap();
     if (!AMap || !map) return;
 
-    const dashedLine = new AMap.Polyline({
-      path: [p1, p2],
-      strokeColor: '#1677ff',
-      strokeWeight: 3,
-      strokeStyle: 'dashed',
-      strokeDasharray: [8, 6],
-      strokeOpacity: 0.8,
-      zIndex: 290,
-    });
-    dashedLine.setMap(map);
-    overlaysRef.current.push(dashedLine);
-  }, []);
+    detachMapEvents();
+    map.setDefaultCursor('default');
+    setState('idle');
+
+    if (pointsRef.current.length >= 2) {
+      setDistance(calcTotalDistance(AMap, pointsRef.current));
+    }
+  }, [detachMapEvents]);
 
   const startMeasure = useCallback(() => {
     const AMap = getAMap();
@@ -95,34 +138,32 @@ export default function RulerTool() {
     if (!AMap || !map) return;
 
     cleanup();
-    setState('first');
+    setState('measuring');
     map.setDefaultCursor('crosshair');
 
-    const handler = (e: any) => {
+    const onClick = (e: any) => {
       const lnglat = e.lnglat;
       const pos: [number, number] = [Number(lnglat.getLng()), Number(lnglat.getLat())];
 
-      if (stateRef.current === 'first') {
-        pointsRef.current = [pos];
-        addPointMarker(pos, 'A');
-        setState('second');
-      } else if (stateRef.current === 'second') {
-        pointsRef.current.push(pos);
-        addPointMarker(pos, 'B');
-        drawLine(pointsRef.current[0], pos);
+      pointsRef.current.push(pos);
+      const idx = pointsRef.current.length - 1;
+      addPointMarker(pos, idx);
+      setPointCount(pointsRef.current.length);
 
-        const dist = AMap.GeometryUtil.distance(pointsRef.current[0], pos);
-        setDistance(dist);
-        setState('idle');
-        map.setDefaultCursor('default');
-        map.off('click', handler);
-        clickHandlerRef.current = null;
+      if (pointsRef.current.length >= 2) {
+        updatePolyline();
       }
     };
 
-    clickHandlerRef.current = handler;
-    map.on('click', handler);
-  }, [cleanup, addPointMarker, drawLine]);
+    const onRightClick = () => {
+      finishMeasure();
+    };
+
+    clickHandlerRef.current = onClick;
+    rightClickHandlerRef.current = onRightClick;
+    map.on('click', onClick);
+    map.on('rightclick', onRightClick);
+  }, [cleanup, addPointMarker, updatePolyline, finishMeasure]);
 
   const stopMeasure = useCallback(() => {
     setState('idle');
@@ -131,7 +172,7 @@ export default function RulerTool() {
 
   if (!mapAvailable) return null;
 
-  const isActive = state !== 'idle' || distance !== null;
+  const isActive = state === 'measuring' || distance !== null;
 
   return (
     <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 500 }}>
@@ -142,7 +183,6 @@ export default function RulerTool() {
         overflow: 'hidden',
         minWidth: 44,
       }}>
-        {/* Toggle button */}
         <div
           onClick={isActive ? stopMeasure : startMeasure}
           style={{
@@ -167,25 +207,17 @@ export default function RulerTool() {
           <span>测距</span>
         </div>
 
-        {/* Hint text */}
-        {state === 'first' && (
+        {state === 'measuring' && (
           <div style={{
             padding: '6px 12px', fontSize: 12, color: '#666',
             borderTop: '1px solid #f0f0f0', background: '#fafafa',
           }}>
-            点击地图选择起点 A
-          </div>
-        )}
-        {state === 'second' && (
-          <div style={{
-            padding: '6px 12px', fontSize: 12, color: '#666',
-            borderTop: '1px solid #f0f0f0', background: '#fafafa',
-          }}>
-            点击地图选择终点 B
+            {pointCount === 0
+              ? '左键点击添加起点'
+              : `已添加 ${pointCount} 个点，右键结束`}
           </div>
         )}
 
-        {/* Result */}
         {distance !== null && (
           <div style={{
             padding: '8px 12px',
@@ -194,7 +226,7 @@ export default function RulerTool() {
             lineHeight: 1.8,
           }}>
             <div style={{ fontWeight: 600, fontSize: 14, color: '#1677ff', marginBottom: 2 }}>
-              {formatDistance(distance)}
+              总距离：{formatDistance(distance)}
             </div>
             <div style={{ color: '#555' }}>
               🚶 步行：{estimateTime(distance, 5)}
@@ -202,6 +234,11 @@ export default function RulerTool() {
             <div style={{ color: '#555' }}>
               🚲 骑行：{estimateTime(distance, 15)}
             </div>
+            {pointCount > 2 && (
+              <div style={{ color: '#999', fontSize: 11, marginTop: 2 }}>
+                共 {pointCount} 个节点，{pointCount - 1} 段路径
+              </div>
+            )}
           </div>
         )}
       </div>
