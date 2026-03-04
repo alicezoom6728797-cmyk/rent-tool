@@ -41,6 +41,10 @@ function fetchAllLines(
   const allLines = new Map<string, LineInfo>();
   let completed = 0;
 
+  const normalizeStopName = (name: string) =>
+    (name || '').replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+      .replace(/站$/, '').replace(/\s+/g, '').trim();
+
   const processResult = (station: StationInfo, stationInfos: any[]) => {
     const nearby = stationInfos.filter((si: any) => {
       if (!si.location) return false;
@@ -54,7 +58,9 @@ function fetchAllLines(
       (si.buslines || []).forEach((line: any) => {
         const baseName = line.name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
           .replace(/(上行|下行)$/, '').trim();
-        const stops = [line.start_stop || '', line.end_stop || ''].sort();
+        const startNorm = normalizeStopName(line.start_stop);
+        const endNorm = normalizeStopName(line.end_stop);
+        const stops = [startNorm, endNorm].sort();
         const mergeKey = `${baseName}_${stops[0]}_${stops[1]}`;
 
         if (allLines.has(mergeKey)) {
