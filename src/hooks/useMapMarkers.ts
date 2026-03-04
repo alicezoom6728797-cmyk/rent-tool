@@ -11,6 +11,8 @@ export function useMapMarkers() {
   const stations = useAppStore((s) => s.stations);
   const center = useAppStore((s) => s.center);
   const lines = useAppStore((s) => s.lines);
+  const selectedLineId = useAppStore((s) => s.selectedLineId);
+  const setSelectedLineId = useAppStore((s) => s.setSelectedLineId);
 
   const markersRef = useRef<any[]>([]);
   const routeOverlaysRef = useRef<any[]>([]);
@@ -60,24 +62,59 @@ export function useMapMarkers() {
     routeOverlaysRef.current = [];
 
     const visibleLines = lines.filter((l) => l.visible && l.loaded && l.path.length > 1);
+    const hasSelection = selectedLineId != null;
 
     visibleLines.forEach((line) => {
+      const isSelected = line.id === selectedLineId;
+      const dimmed = hasSelection && !isSelected;
       const path = line.path.map(toLngLat);
+
       const polyline = new AMap.Polyline({
-        path, strokeColor: line.color, strokeWeight: 5,
-        strokeOpacity: 0.8, lineJoin: 'round', lineCap: 'round', zIndex: 50,
+        path, strokeColor: line.color,
+        strokeWeight: isSelected ? 8 : 5,
+        strokeOpacity: dimmed ? 0.3 : isSelected ? 1 : 0.8,
+        lineJoin: 'round', lineCap: 'round',
+        zIndex: isSelected ? 100 : 50,
+        cursor: 'pointer',
       });
       polyline.setMap(map);
+      polyline.on('click', () => {
+        setSelectedLineId(isSelected ? null : line.id);
+      });
       routeOverlaysRef.current.push(polyline);
 
       line.stops.forEach((stop) => {
         if (!stop.location) return;
         const dot = new AMap.CircleMarker({
-          center: toLngLat(stop.location), radius: 4,
-          fillColor: line.color, fillOpacity: 1,
-          strokeColor: '#fff', strokeWeight: 1, zIndex: 60,
+          center: toLngLat(stop.location),
+          radius: isSelected ? 5 : 4,
+          fillColor: line.color, fillOpacity: dimmed ? 0.3 : 1,
+          strokeColor: '#fff', strokeWeight: 1,
+          zIndex: isSelected ? 110 : 60,
         });
         dot.setMap(map);
+        if (isSelected) {
+          dot.on('mouseover', () => {
+            const label = new AMap.Text({
+              text: stop.name, position: toLngLat(stop.location!),
+              offset: new AMap.Pixel(8, -12),
+              style: {
+                'font-size': '12px', 'background': 'rgba(0,0,0,0.7)',
+                'color': '#fff', 'padding': '2px 6px', 'border-radius': '3px',
+                'border': 'none', 'white-space': 'nowrap',
+              },
+              zIndex: 200,
+            });
+            label.setMap(map);
+            dot._label = label;
+          });
+          dot.on('mouseout', () => {
+            if (dot._label) {
+              map.remove(dot._label);
+              dot._label = null;
+            }
+          });
+        }
         routeOverlaysRef.current.push(dot);
       });
     });
@@ -85,5 +122,5 @@ export function useMapMarkers() {
     if (routeOverlaysRef.current.length > 0) {
       map.setFitView(routeOverlaysRef.current, false, [60, 60, 60, 400]);
     }
-  }, [lines]);
+  }, [lines, selectedLineId, setSelectedLineId]);
 }

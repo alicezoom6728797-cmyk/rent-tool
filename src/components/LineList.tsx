@@ -35,6 +35,10 @@ function LineItem({ line }: { line: LineInfo }) {
   const city = useAppStore((s) => s.city);
   const updateLine = useAppStore((s) => s.updateLine);
   const toggleLineVisible = useAppStore((s) => s.toggleLineVisible);
+  const selectedLineId = useAppStore((s) => s.selectedLineId);
+  const setSelectedLineId = useAppStore((s) => s.setSelectedLineId);
+
+  const isSelected = selectedLineId === line.id;
 
   const handleToggle = (checked: boolean) => {
     if (checked && !line.loaded) {
@@ -43,23 +47,88 @@ function LineItem({ line }: { line: LineInfo }) {
     toggleLineVisible(line.id);
   };
 
+  const handleClick = () => {
+    if (!line.loaded) {
+      loadLineDetail(line, city, (patch) => updateLine(line.id, patch));
+    }
+    setSelectedLineId(isSelected ? null : line.id);
+  };
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 0', gap: 8, borderBottom: '1px solid #f5f5f5' }}>
-      <Switch size="small" checked={line.visible} onChange={handleToggle} />
-      <div style={{ width: 10, height: 10, borderRadius: line.type === 'subway' ? '50%' : 2,
-        background: line.color, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {line.name}
+    <div>
+      <div
+        onClick={handleClick}
+        style={{
+          display: 'flex', alignItems: 'center', padding: '8px 8px', gap: 8,
+          borderBottom: isSelected ? 'none' : '1px solid #f5f5f5',
+          background: isSelected ? `${line.color}12` : 'transparent',
+          borderLeft: isSelected ? `3px solid ${line.color}` : '3px solid transparent',
+          cursor: 'pointer', borderRadius: isSelected ? '4px 4px 0 0' : 0,
+          transition: 'all 0.2s',
+        }}
+      >
+        <Switch size="small" checked={line.visible} onChange={handleToggle}
+          onClick={(_, e) => e.stopPropagation()} />
+        <div style={{ width: 10, height: 10, borderRadius: line.type === 'subway' ? '50%' : 2,
+          background: line.color, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {line.name}
+          </div>
+          <div style={{ fontSize: 11, color: '#999' }}>
+            {line.nearestStation} · {line.nearestDistance}m
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: '#999' }}>
-          {line.nearestStation} · {line.nearestDistance}m
-          {line.startTime && line.startTime !== '--' && ` · ${line.startTime}-${line.endTime}`}
-        </div>
+        <Tag color={line.type === 'subway' ? 'blue' : 'green'} style={{ margin: 0, fontSize: 11 }}>
+          {line.type === 'subway' ? '地铁' : '公交'}
+        </Tag>
       </div>
-      <Tag color={line.type === 'subway' ? 'blue' : 'green'} style={{ margin: 0, fontSize: 11 }}>
-        {line.type === 'subway' ? '地铁' : '公交'}
-      </Tag>
+
+      {isSelected && (
+        <div style={{
+          padding: '8px 12px 10px', fontSize: 12, color: '#555',
+          background: `${line.color}08`, borderLeft: `3px solid ${line.color}`,
+          borderBottom: '1px solid #f0f0f0', borderRadius: '0 0 4px 4px',
+        }}>
+          {line.startStop && line.endStop && (
+            <div style={{ marginBottom: 4 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>起终点：</Text>
+              <span>{line.startStop} → {line.endStop}</span>
+            </div>
+          )}
+          {line.startTime && line.startTime !== '--' && (
+            <div style={{ marginBottom: 4 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>运营时间：</Text>
+              <span>{line.startTime} - {line.endTime}</span>
+            </div>
+          )}
+          {line.interval && (
+            <div style={{ marginBottom: 4 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>班次信息：</Text>
+              <span>{line.interval}</span>
+            </div>
+          )}
+          {line.loaded && line.stops.length > 0 && (
+            <div>
+              <Text type="secondary" style={{ fontSize: 11 }}>途经站点（{line.stops.length}站）：</Text>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 2, lineHeight: 1.8 }}>
+                {line.stops.map((s, i) => (
+                  <span key={i}>
+                    {i > 0 && <span style={{ margin: '0 2px', color: '#ccc' }}>→</span>}
+                    {s.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {!line.loaded && (
+            <div style={{ color: '#999', fontStyle: 'italic' }}>
+              <Spin size="small" style={{ marginRight: 6 }} />加载详情中...
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ interface AppState {
   linesLoading: boolean;
   colorIndex: number;
   loadingProgress: { current: number; total: number } | null;
+  selectedLineId: string | null;
 
   setCity: (c: string) => void;
   setAddress: (addr: string) => void;
@@ -32,6 +33,7 @@ interface AppState {
   updateLine: (id: string, patch: Partial<LineInfo>) => void;
   toggleLineVisible: (id: string) => void;
   toggleAllLines: (type: 'subway' | 'bus', visible: boolean) => void;
+  setSelectedLineId: (id: string | null) => void;
   loadLineDetails: (ids: string[]) => void;
   cancelLoading: () => void;
   setLoading: (l: boolean) => void;
@@ -51,6 +53,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   linesLoading: false,
   colorIndex: 0,
   loadingProgress: null,
+  selectedLineId: null,
 
   setCity: (city) => set({ city }),
   setAddress: (address) => set({ address }),
@@ -67,6 +70,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleAllLines: (type: 'subway' | 'bus', visible: boolean) => set((s) => ({
     lines: s.lines.map((l) => l.type === type ? { ...l, visible } : l),
   })),
+  setSelectedLineId: (id) => set({ selectedLineId: id }),
   loadLineDetails: (ids: string[]) => {
     const state = get();
     const AMap = getAMap();
@@ -136,7 +140,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setLoading: (loading) => set({ loading }),
   setLinesLoading: (linesLoading) => set({ linesLoading }),
-  reset: () => set({ stations: [], lines: [], colorIndex: 0, linesLoading: false }),
+  reset: () => set({ stations: [], lines: [], colorIndex: 0, linesLoading: false, selectedLineId: null }),
   nextColor: () => {
     const idx = get().colorIndex;
     set({ colorIndex: (idx + 1) % COLORS.length });
