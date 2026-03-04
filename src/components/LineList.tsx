@@ -24,6 +24,8 @@ function loadLineDetail(line: LineInfo, city: string, onDone: (patch: Partial<Li
         const t = parseTimedesc(info.timedesc);
         startTime = t.startTime; endTime = t.endTime; interval = t.interval;
       }
+      if (startTime === '--' && info.stime) startTime = info.stime;
+      if (endTime === '--' && info.etime) endTime = info.etime;
       onDone({ path, stops, startTime, endTime, interval, loaded: true });
     } else {
       onDone({ loaded: true });
@@ -107,6 +109,12 @@ function LineItem({ line }: { line: LineInfo }) {
             <div style={{ marginBottom: 4 }}>
               <Text type="secondary" style={{ fontSize: 11 }}>班次信息：</Text>
               <span>{line.interval}</span>
+            </div>
+          )}
+          {line.loaded && !line.startStop && !line.endStop &&
+           (!line.startTime || line.startTime === '--') && !line.interval && (
+            <div style={{ marginBottom: 4, color: '#999', fontStyle: 'italic' }}>
+              暂无班次信息
             </div>
           )}
           {line.loaded && line.stops.length > 0 && (

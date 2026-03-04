@@ -7,6 +7,14 @@ function toLngLat(p: any): [number, number] {
   return [Number(p.lng ?? p.getLng()), Number(p.lat ?? p.getLat())];
 }
 
+function isPointNearPath(AMap: any, point: [number, number], path: [number, number][], threshold: number): boolean {
+  for (let i = 0; i < path.length - 1; i++) {
+    const dist = AMap.GeometryUtil.distanceToSegment(point, path[i], path[i + 1]);
+    if (dist < threshold) return true;
+  }
+  return false;
+}
+
 export function useMapMarkers() {
   const stations = useAppStore((s) => s.stations);
   const center = useAppStore((s) => s.center);
@@ -17,6 +25,7 @@ export function useMapMarkers() {
   const markersRef = useRef<any[]>([]);
   const routeOverlaysRef = useRef<any[]>([]);
   const centerMarkerRef = useRef<any>(null);
+  const infoWindowRef = useRef<any>(null);
 
   // 站点标记
   useEffect(() => {
@@ -60,9 +69,68 @@ export function useMapMarkers() {
 
     routeOverlaysRef.current.forEach((o) => { try { map.remove(o); } catch {} });
     routeOverlaysRef.current = [];
+    if (infoWindowRef.current) {
+      infoWindowRef.current.close();
+      infoWindowRef.current = null;
+    }
 
     const visibleLines = lines.filter((l) => l.visible && l.loaded && l.path.length > 1);
     const hasSelection = selectedLineId != null;
+    const selectedOverlays: any[] = [];
+
+    const handleLineClick = (e: any, clickedLine: typeof visibleLines[0]) => {
+      const clickPos: [number, number] = toLngLat(e.lnglat);
+      const nearbyLines = visibleLines.filter((l) =>
+        isPointNearPath(AMap, clickPos, l.path.map(toLngLat), 50)
+      );
+
+      if (nearbyLines.length <= 1) {
+        setSelectedLineId(clickedLine.id === selectedLineId ? null : clickedLine.id);
+        return;
+      }
+
+      if (infoWindowRef.current) infoWindowRef.current.close();
+
+      const content = `
+        <div style="padding:8px 0;min-width:120px;">
+          <div style="font-size:12px;color:#666;margin-bottom:6px;padding:0 8px;">
+            此处有 ${nearbyLines.length} 条路线经过
+          </div>
+          ${nearbyLines.map((l) => `
+            <div class="line-option" data-line-id="${l.id}" style="
+              display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;
+              border-radius:4px;transition:background 0.2s;
+            " onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='transparent'">
+              <div style="width:12px;height:12px;border-radius:${l.type === 'subway' ? '50%' : '2px'};
+                background:${l.color};flex-shrink:0;"></div>
+              <span style="font-size:13px;color:#333;">${l.name}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      const infoWindow = new AMap.InfoWindow({
+        content,
+        offset: new AMap.Pixel(0, -10),
+        closeWhenClickMap: true,
+      });
+      infoWindow.open(map, clickPos);
+      infoWindowRef.current = infoWindow;
+
+      setTimeout(() => {
+        const options = document.querySelectorAll('.line-option');
+        options.forEach((opt) => {
+          opt.addEventListener('click', () => {
+            const lineId = opt.getAttribute('data-line-id');
+            if (lineId) {
+              setSelectedLineId(lineId);
+              infoWindow.close();
+              infoWindowRef.current = null;
+            }
+          });
+        });
+      }, 50);
+    };
 
     visibleLines.forEach((line) => {
       const isSelected = line.id === selectedLineId;
@@ -78,10 +146,9 @@ export function useMapMarkers() {
         cursor: 'pointer',
       });
       polyline.setMap(map);
-      polyline.on('click', () => {
-        setSelectedLineId(isSelected ? null : line.id);
-      });
+      polyline.on('click', (e: any) => handleLineClick(e, line));
       routeOverlaysRef.current.push(polyline);
+      if (isSelected) selectedOverlays.push(polyline);
 
       line.stops.forEach((stop) => {
         if (!stop.location) return;
@@ -94,6 +161,7 @@ export function useMapMarkers() {
         });
         dot.setMap(map);
         if (isSelected) {
+          selectedOverlays.push(dot);
           dot.on('mouseover', () => {
             const label = new AMap.Text({
               text: stop.name, position: toLngLat(stop.location!),
@@ -119,7 +187,10 @@ export function useMapMarkers() {
       });
     });
 
-    if (routeOverlaysRef.current.length > 0) {
+    if (hasSelection && selectedOverlays.length > 0) {
+      if (centerMarkerRef.current) selectedOverlays.push(centerMarkerRef.current);
+      map.setFitView(selectedOverlays, false, [60, 60, 60, 400]);
+    } else if (routeOverlaysRef.current.length > 0) {
       map.setFitView(routeOverlaysRef.current, false, [60, 60, 60, 400]);
     }
   }, [lines, selectedLineId, setSelectedLineId]);

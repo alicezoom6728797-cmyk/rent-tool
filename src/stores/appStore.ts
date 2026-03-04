@@ -120,6 +120,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             endTime = t.endTime;
             interval = t.interval;
           }
+          if (startTime === '--' && info.stime) startTime = info.stime;
+          if (endTime === '--' && info.etime) endTime = info.etime;
 
           get().updateLine(id, { path, stops, startTime, endTime, interval, loaded: true });
         }

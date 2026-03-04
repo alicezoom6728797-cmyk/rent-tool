@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { AutoComplete, Cascader, message, Input } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { getAMap, getMap } from '../services/amapService';
@@ -102,11 +102,24 @@ function fetchAllLines(
 
 export default function SearchBar() {
   const { setCenter, setAddress, setStations, setLines, setLoading, setLinesLoading,
-    radius, reset, city, setCity, nextColor } = useAppStore();
+    radius, reset, city, setCity, nextColor, center } = useAppStore();
   const [inputVal, setInputVal] = useState('');
   const [suggestions, setSuggestions] = useState<{ value: string; label: string }[]>([]);
   const timerRef = useRef<any>(null);
   const searchingRef = useRef(false);
+  const prevRadiusRef = useRef(radius);
+
+  useEffect(() => {
+    if (prevRadiusRef.current !== radius && center) {
+      prevRadiusRef.current = radius;
+      const AMap = getAMap();
+      if (AMap) {
+        reset();
+        setLoading(true);
+        searchNearbyStations(center, radius, AMap);
+      }
+    }
+  }, [radius]);
 
   const getCityPath = (): string[] => {
     for (const p of CITY_OPTIONS) {
@@ -206,10 +219,10 @@ export default function SearchBar() {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <Cascader options={CITY_OPTIONS} value={getCityPath()} onChange={handleCityChange}
-        allowClear={false} style={{ width: 180 }} size="large" placeholder="选择城市" />
-      <AutoComplete style={{ flex: 1 }} options={suggestions} value={inputVal}
+        allowClear={false} style={{ width: '100%' }} size="large" placeholder="选择城市" />
+      <AutoComplete style={{ width: '100%' }} options={suggestions} value={inputVal}
         onChange={handleInputChange} popupMatchSelectWidth={true}
         onSelect={(val) => { searchingRef.current = true; clearTimeout(timerRef.current); setInputVal(val); handleSearch(val); }}>
         <Input size="large" placeholder="输入地址搜索，如：西湖文化广场"
