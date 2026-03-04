@@ -26,6 +26,8 @@ export function useMapMarkers() {
   const routeOverlaysRef = useRef<any[]>([]);
   const centerMarkerRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
 
   // 站点标记
   useEffect(() => {
@@ -53,13 +55,78 @@ export function useMapMarkers() {
       const r = s.type === 'subway' ? '50%' : '3px';
       const marker = new AMap.Marker({
         position: s.location, map, zIndex: 100,
-        content: `<div style="width:12px;height:12px;background:${c};border:2px solid #fff;border-radius:${r};box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>`,
+        content: `<div style="width:12px;height:12px;background:${c};border:2px solid #fff;border-radius:${r};box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer"></div>`,
         offset: new AMap.Pixel(-6, -6),
-        title: `${s.name} (${s.distance}m)`,
       });
+
+      marker.on('click', () => {
+        if (infoWindowRef.current) {
+          infoWindowRef.current.close();
+        }
+
+        const relatedLines = linesRef.current.filter((l) =>
+          l.nearestStation === s.name ||
+          l.stops.some((stop) => stop.name === s.name)
+        );
+
+        const content = `
+          <div style="padding:8px 0;min-width:150px;max-width:280px;">
+            <div style="font-weight:600;font-size:14px;color:#333;padding:0 10px;margin-bottom:4px;">
+              ${s.name}
+            </div>
+            <div style="font-size:12px;color:#888;padding:0 10px;margin-bottom:8px;">
+              ${s.type === 'subway' ? '地铁站' : '公交站'} · 距中心 ${s.distance}m
+            </div>
+            ${relatedLines.length > 0 ? `
+              <div style="border-top:1px solid #f0f0f0;padding-top:6px;">
+                <div style="font-size:11px;color:#999;padding:0 10px;margin-bottom:4px;">
+                  经过线路 (${relatedLines.length})
+                </div>
+                ${relatedLines.map((l) => `
+                  <div class="station-line-option" data-line-id="${l.id}" style="
+                    display:flex;align-items:center;gap:6px;padding:5px 10px;cursor:pointer;
+                    transition:background 0.2s;
+                  " onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='transparent'">
+                    <div style="width:10px;height:10px;border-radius:${l.type === 'subway' ? '50%' : '2px'};
+                      background:${l.color};flex-shrink:0;"></div>
+                    <span style="font-size:12px;color:#333;">${l.name}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div style="font-size:12px;color:#999;padding:0 10px;font-style:italic;">
+                暂无线路数据
+              </div>
+            `}
+          </div>
+        `;
+
+        const infoWindow = new AMap.InfoWindow({
+          content,
+          offset: new AMap.Pixel(0, -10),
+          closeWhenClickMap: true,
+        });
+        infoWindow.open(map, s.location);
+        infoWindowRef.current = infoWindow;
+
+        setTimeout(() => {
+          const options = document.querySelectorAll('.station-line-option');
+          options.forEach((opt) => {
+            opt.addEventListener('click', () => {
+              const lineId = opt.getAttribute('data-line-id');
+              if (lineId) {
+                setSelectedLineId(lineId);
+                infoWindow.close();
+                infoWindowRef.current = null;
+              }
+            });
+          });
+        }, 50);
+      });
+
       markersRef.current.push(marker);
     });
-  }, [stations, center]);
+  }, [stations, center, setSelectedLineId]);
 
   // 路线绑制
   useEffect(() => {
@@ -74,7 +141,9 @@ export function useMapMarkers() {
       infoWindowRef.current = null;
     }
 
-    const visibleLines = lines.filter((l) => l.visible && l.loaded && l.path.length > 1);
+    const visibleLines = lines.filter((l) => 
+      (l.visible || l.id === selectedLineId) && l.loaded && l.path.length > 1
+    );
     const hasSelection = selectedLineId != null;
     const selectedOverlays: any[] = [];
 
@@ -136,6 +205,19 @@ export function useMapMarkers() {
       const isSelected = line.id === selectedLineId;
       const dimmed = hasSelection && !isSelected;
       const path = line.path.map(toLngLat);
+
+      if (isSelected) {
+        const glowLine = new AMap.Polyline({
+          path, strokeColor: line.color,
+          strokeWeight: 14,
+          strokeOpacity: 0.35,
+          lineJoin: 'round', lineCap: 'round',
+          zIndex: 99,
+        });
+        glowLine.setMap(map);
+        routeOverlaysRef.current.push(glowLine);
+        selectedOverlays.push(glowLine);
+      }
 
       const polyline = new AMap.Polyline({
         path, strokeColor: line.color,

@@ -32,6 +32,19 @@ const CITY_OPTIONS: { value: string; label: string; children?: { value: string; 
   { value: '天津', label: '天津', children: [{ value: '天津', label: '天津' }] },
 ];
 
+function extractLineNumber(name: string): number {
+  const subwayMatch = name.match(/^(?:地铁)?(\d+)号线/);
+  if (subwayMatch) return parseInt(subwayMatch[1], 10);
+
+  const busMatch = name.match(/^([A-Za-z]?)(\d+)/);
+  if (busMatch) {
+    const prefix = busMatch[1] ? busMatch[1].toUpperCase().charCodeAt(0) - 64 : 0;
+    return prefix * 10000 + parseInt(busMatch[2], 10);
+  }
+
+  return Infinity;
+}
+
 // 批量查站点线路，按站名搜索后按位置过滤（排除同名远距离站点）
 function fetchAllLines(
   stations: StationInfo[], city: string, AMap: any,
@@ -92,7 +105,10 @@ function fetchAllLines(
       completed++;
       const sorted = [...allLines.values()].sort((a, b) => {
         if (a.type !== b.type) return a.type === 'subway' ? -1 : 1;
-        return a.nearestDistance - b.nearestDistance;
+        const numA = extractLineNumber(a.name);
+        const numB = extractLineNumber(b.name);
+        if (numA !== numB) return numA - numB;
+        return a.name.localeCompare(b.name, 'zh-CN');
       });
       onProgress(sorted, completed >= stations.length);
     });
