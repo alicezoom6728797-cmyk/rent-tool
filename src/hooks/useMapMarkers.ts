@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { getAMap, getMap } from '../services/amapService';
 import { useAppStore } from '../stores/appStore';
+import type { StopInfo } from '../types';
 
 function toLngLat(p: any): [number, number] {
   if (Array.isArray(p)) return [Number(p[0]), Number(p[1])];
@@ -13,6 +14,34 @@ function isPointNearPath(AMap: any, point: [number, number], path: [number, numb
     if (dist < threshold) return true;
   }
   return false;
+}
+
+function findNearestStopToCenter(stops: StopInfo[], center: [number, number]): StopInfo | null {
+  let nearest: StopInfo | null = null;
+  let minDist = Infinity;
+  for (const stop of stops) {
+    if (!stop.location) continue;
+    const dx = stop.location[0] - center[0];
+    const dy = stop.location[1] - center[1];
+    const dist = dx * dx + dy * dy;
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = stop;
+    }
+  }
+  return nearest;
+}
+
+function estimateTravelTime(type: 'subway' | 'bus', stopCount: number): { offPeak: number; morningPeak: number; eveningPeak: number } {
+  const baseMinutes = type === 'subway' ? 2 : 3;
+  const morningMultiplier = type === 'subway' ? 1.3 : 1.8;
+  const eveningMultiplier = type === 'subway' ? 1.25 : 1.7;
+  const offPeak = stopCount * baseMinutes;
+  return {
+    offPeak,
+    morningPeak: Math.round(offPeak * morningMultiplier),
+    eveningPeak: Math.round(offPeak * eveningMultiplier),
+  };
 }
 
 export function useMapMarkers() {
@@ -28,6 +57,8 @@ export function useMapMarkers() {
   const infoWindowRef = useRef<any>(null);
   const linesRef = useRef(lines);
   linesRef.current = lines;
+  const centerRef = useRef(center);
+  centerRef.current = center;
 
   // 站点标记
   useEffect(() => {
@@ -263,6 +294,42 @@ export function useMapMarkers() {
               map.remove(dot._label);
               dot._label = null;
             }
+          });
+          dot.on('click', () => {
+            if (infoWindowRef.current) infoWindowRef.current.close();
+            const currentCenter = centerRef.current;
+            if (!currentCenter || !stop.location) return;
+
+            const nearestStop = findNearestStopToCenter(line.stops, currentCenter);
+            if (!nearestStop) return;
+
+            const stopCount = Math.abs(stop.sequence - nearestStop.sequence);
+            const times = estimateTravelTime(line.type, stopCount);
+
+            const content = stopCount === 0
+              ? `
+                <div style="padding:8px 10px;min-width:120px;">
+                  <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:4px;">${stop.name}</div>
+                  <div style="font-size:12px;color:#52c41a;">即为目的地最近站</div>
+                </div>
+              `
+              : `
+                <div style="padding:8px 10px;min-width:140px;">
+                  <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:4px;">${stop.name}</div>
+                  <div style="font-size:12px;color:#666;margin-bottom:6px;">到目的地共 ${stopCount} 站</div>
+                  <div style="font-size:12px;color:#333;margin-bottom:2px;">平峰：约 ${times.offPeak} 分钟</div>
+                  <div style="font-size:12px;color:#fa8c16;margin-bottom:2px;">早高峰（7-9点）：约 ${times.morningPeak} 分钟</div>
+                  <div style="font-size:12px;color:#fa8c16;">晚高峰（17-20点）：约 ${times.eveningPeak} 分钟</div>
+                </div>
+              `;
+
+            const iw = new AMap.InfoWindow({
+              content,
+              offset: new AMap.Pixel(0, -8),
+              closeWhenClickMap: true,
+            });
+            iw.open(map, toLngLat(stop.location));
+            infoWindowRef.current = iw;
           });
         }
         routeOverlaysRef.current.push(dot);
